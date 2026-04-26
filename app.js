@@ -459,10 +459,8 @@ async function enviarPredicciones() {
         // Limpiar inputs
         document.querySelectorAll('.input-goles').forEach(inp => inp.value = "");
         
-        // Abrir WhatsApp
-        const mensaje = `Hola! Soy ${nombre} y ya cargué mi prode ⚽`;
-        const url = `https://wa.me/5492392584053?text=${encodeURIComponent(mensaje)}`;
-        window.open(url, '_blank');
+        // Limpiar radios de partidos y gol
+        document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
 
     } catch (error) {
         console.error("Error guardando:", error);
