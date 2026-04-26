@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Prode del Pueblo</title>
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        // Bloqueo simple por contraseña ANTES de renderizar la página
+        const pass = prompt("🔒 Ingrese la contraseña de administrador:");
+        if (pass !== "independiente") {
+            alert("Acceso denegado. No autorizado.");
+            window.location.href = "index.html";
+            document.documentElement.innerHTML = '';
+            throw new Error("Acceso denegado");
+        }
+    </script>
+</head>
+
+<body>
+    <header class="admin-header">
+        <h1>⚙️ Panel de Administración</h1>
+        <a href="index.html" class="link-back">← Volver al inicio</a>
+    </header>
+
+    <main id="admin-main">
+
+        <!-- CREAR / EDITAR PARTIDO -->
+        <section class="card">
+            <h2 id="titulo-form-partido">➕ Crear Partido</h2>
+            <form id="crear-partido-form">
+                <input type="hidden" id="partido-edit-id" value="">
+                <div class="form-group" id="grupo-categoria">
+                    <label>Categoría:</label>
+                    <select id="partido-categoria"
+                        style="width:100%; padding:0.8rem; border-radius:8px; border:1px solid var(--card-border); background: rgba(0,0,0,0.3); color: white;">
+                        <option value="Primera">Primera</option>
+                        <option value="Tercera">Tercera</option>
+                        <option value="Senior">Senior</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Jornada / Fecha (Nº):</label>
+                    <input type="number" id="partido-jornada" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Local:</label>
+                    <select id="partido-local"
+                        style="width:100%; padding:0.8rem; border-radius:8px; border:1px solid var(--card-border); background: rgba(0,0,0,0.3); color: white;"
+                        required>
+                        <option value="">— Seleccioná un equipo —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Visitante:</label>
+                    <select id="partido-visitante"
+                        style="width:100%; padding:0.8rem; border-radius:8px; border:1px solid var(--card-border); background: rgba(0,0,0,0.3); color: white;"
+                        required>
+                        <option value="">— Seleccioná un equipo —</option>
+                    </select>
+                </div>
+                <div id="error-mismo-equipo" style="display:none; color: var(--danger); font-size: 0.85rem; margin-bottom: 0.5rem;">
+                    ⚠️ El local y el visitante no pueden ser el mismo equipo.
+                </div>
+                <div class="form-group">
+                    <label>Fecha y Hora:</label>
+                    <input type="datetime-local" id="partido-fecha" required>
+                </div>
+                <div style="display:flex; gap: 10px;">
+                    <button type="submit" id="btn-submit-partido" class="btn-primary">Guardar Partido</button>
+                    <button type="button" id="btn-cancel-edit" class="btn-secondary" style="display:none;"
+                        onclick="cancelarEdicion()">Cancelar</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- CARGAR RESULTADOS -->
+        <section class="card mt-2">
+            <h2>📋 Cargar Resultados Reales</h2>
+            <div id="admin-partidos-list">
+                <p>Cargando partidos...</p>
+            </div>
+        </section>
+
+        <!-- GOL DE LA FECHA -->
+        <section class="card mt-2">
+            <h2>⭐ Configurar "Gol de la Fecha"</h2>
+            <form id="config-gol-form">
+                <div class="form-group">
+                    <label>Jugador de la fecha:</label>
+                    <input type="text" id="config-jugador" placeholder="Ej: Lionel Messi">
+                </div>
+                <div class="form-group">
+                    <label>¿Hizo gol en la fecha?</label>
+                    <select id="config-hizo-gol"
+                        style="width:100%; padding:0.8rem; border-radius:8px; border:1px solid var(--card-border); background: rgba(0,0,0,0.3); color: white;">
+                        <option value="pendiente">Pendiente</option>
+                        <option value="si">Sí</option>
+                        <option value="no">No</option>
+                    </select>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 1rem;">
+                    <label style="margin: 0;">Cerrar Predicción (nadie más puede votar):</label>
+                    <input type="checkbox" id="config-cerrado"
+                        style="width: 24px; height: 24px; accent-color: var(--accent);">
+                </div>
+                <button type="submit" class="btn-primary">Guardar Configuración</button>
+            </form>
+        </section>
+
+        <!-- ACCIONES DE LA FECHA -->
+        <section class="card mt-2">
+            <h2>🛠️ Acciones de la Fecha</h2>
+            <button id="btn-calcular-puntos" class="btn-secondary w-100">Calcular Puntos de Todos</button>
+            <hr style="margin: 15px 0; border-color: var(--card-border);">
+            <button id="btn-cerrar-fecha" class="btn-primary w-100 mb-2"
+                style="background: linear-gradient(135deg, var(--secondary), #0284c7); margin-bottom: 10px;">Cerrar Fecha Global</button>
+            <button id="btn-resetear-fecha" class="btn-primary w-100" style="background: linear-gradient(135deg, var(--accent), #d97706);">
+                🔄 Resetear Fecha
+            </button>
+        </section>
+
+        <!-- PARTICIPANTES Y PAGOS -->
+        <section class="card mt-2">
+            <h2>👥 Participantes y Pagos</h2>
+            <p class="subtitle" style="margin-bottom: 1rem;">
+                Solo los jugadores con <strong style="color:var(--primary)">pago confirmado</strong> aparecen en el ranking.
+            </p>
+            <div class="table-responsive">
+                <table id="usuarios-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>WhatsApp</th>
+                            <th>Pts</th>
+                            <th>Intento</th>
+                            <th>Pago ✓</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usuarios-tbody">
+                        <tr>
+                            <td colspan="5">Cargando usuarios...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script src="firebase.js"></script>
+    <script src="equipos.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

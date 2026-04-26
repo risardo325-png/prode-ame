@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prode del Pueblo</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+</head>
+<body>
+    <header>
+        <img src="img/escudos/independiente.png" alt="Escudo Independiente" class="icono-escudo">
+        <h1 class="header-title">Prode del Pueblo</h1>
+        <p class="subtitle">¡Demostrá cuánto sabés de fútbol!</p>
+        <p class="precio-prode">Bono contribución: $2000</p>
+        <div class="tabs-torneo">
+            <button class="tab-torneo tab-activa" data-torneo="pueblo" onclick="cambiarTorneo('pueblo')">⚽ Pueblo</button>
+            <button class="tab-torneo" data-torneo="mundial" onclick="cambiarTorneo('mundial')">🌍 Mundial</button>
+        </div>
+    </header>
+
+    <main id="user-main">
+
+        <!-- =============================================
+             SECCIÓN PUEBLO (visible por defecto)
+        ============================================== -->
+        <div id="seccion-pueblo">
+            <div class="container-prode">
+
+                <section class="card" id="registro-section">
+                    <h2>Tus Datos</h2>
+                    <form id="registro-form">
+                        <div class="form-group">
+                            <label for="nombre">Nombre completo:</label>
+                            <input type="text" id="nombre" required placeholder="Ej: Juan Pérez">
+                        </div>
+                        <div class="form-group">
+                            <label for="whatsapp">WhatsApp:</label>
+                            <input type="tel" id="whatsapp" required placeholder="Ej: 3412345678">
+                        </div>
+                    </form>
+                    <button id="btn-registrarse" class="btn-primary" style="margin-top: 1.2rem;">
+                        📲 Completar registro
+                    </button>
+                </section>
+
+                <!-- BANNER PAGO — solo informativo, NO bloquea -->
+
+
+                <section class="card" id="partidos-section">
+                    <h2>⚽ Partidos de la Fecha</h2>
+                    <p class="subtitle">Ingresá tu predicción para cada encuentro</p>
+                    <div id="partidos-list">
+                        <p>Cargando partidos...</p>
+                    </div>
+
+                    <div id="gol-fecha-container" style="display: none; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--card-border);">
+                        <h2>⭐ ¿Hace gol esta fecha?</h2>
+                        <p class="subtitle" id="gol-fecha-jugador" style="text-align: center; color: var(--text-main); font-weight: 600;">Cargando jugador...</p>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="prediccion-gol" value="si">
+                                <span class="radio-btn">Sí, anota</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="prediccion-gol" value="no">
+                                <span class="radio-btn">No anota</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button id="btn-participar" class="btn-primary" style="margin-top: 2rem;">¡Confirmar Predicciones!</button>
+                </section>
+
+                <section class="card" id="ranking-section">
+                    <h2> Tabla de Posiciones</h2>
+                    <p class="ranking-info">🏆 El ganador mensual se lleva premio</p>
+                    <div class="ranking-nota">
+                        🔒 Solo participantes con pago confirmado aparecen en el ranking
+                    </div>
+                    <div id="ranking-list" class="ranking-container">
+                        <p>Cargando ranking...</p>
+                    </div>
+                </section>
+
+            </div><!-- /container-prode -->
+        </div><!-- /seccion-pueblo -->
+
+        <!-- =============================================
+             SECCIÓN MUNDIAL — PRÓXIMAMENTE
+        ============================================== -->
+        <div id="seccion-mundial" style="display:none;">
+            <div class="mundial-coming-soon">
+                <div class="mundial-cs-glow"></div>
+
+                <!-- Copa del Mundo PNG (fuente externa, transparente) -->
+                <!-- URL: https://upload.wikimedia.org/wikipedia/en/thumb/6/67/2026_FIFA_World_Cup_emblem.svg/800px-2026_FIFA_World_Cup_emblem.svg.png -->
+                <img
+                    src="https://static.wikia.nocookie.net/logopedia/images/1/14/2026_FIFA_World_Cup_%28Inverted%29.svg/revision/latest/scale-to-width-down/250?cb=20230523174302"
+                    class="mundial-cs-trophy icono-mundial"
+                    alt="Copa del Mundo"
+                    onerror="this.src='https://cdn-icons-png.flaticon.com/512/3514/3514491.png'"
+                >
+
+                <div class="mundial-cs-badge">MUY PRONTO</div>
+
+                <h2 class="mundial-cs-title">Mundial 2026</h2>
+
+                <p class="mundial-cs-desc">
+                    Estamos preparando una experiencia <strong>premium</strong> para el Mundial. Muy pronto vas a poder competir a nivel internacional.
+                </p>
+
+                <div class="mundial-cs-divider">
+                    <span>⭐</span>
+                </div>
+
+                <p class="mundial-cs-sub">
+                    Seguí jugando el Prode del Pueblo mientras tanto y<br>
+                    afilá la puntería para el Mundial 🌎
+                </p>
+
+                <button class="btn-volver-pueblo" onclick="cambiarTorneo('pueblo')">
+                    ⚽ Volver al Prode del Pueblo
+                </button>
+            </div>
+        </div><!-- /seccion-mundial -->
+
+    </main>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script src="firebase.js"></script>
+    <script src="equipos.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

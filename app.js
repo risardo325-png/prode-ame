@@ -1,0 +1,1227 @@
+// Registrar Service Worker para PWA
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js')
+    .then(() => console.log('Service Worker Registrado'))
+    .catch(err => console.error('Error registrando SW:', err));
+}
+
+// Variables globales para almacenar datos cargados y evitar re-fetches innecesarios
+let partidosGlobal = [];
+let partidosGlobalAdmin = [];
+let resultadosGlobal = {};
+
+// ===== MULTI-TORNEO =====
+// Torneo activo. Leer desde URL (?torneo=mundial) o por defecto "pueblo"
+const _urlParams = new URLSearchParams(window.location.search);
+let torneoActual = _urlParams.get('torneo') || 'pueblo';
+
+// cambiarTorneo: definido en la sección LÓGICA DEL USUARIO (override completo)
+// Se sobrescribe en initUserApp para manejar las secciones pueblo / mundial
+
+// Helper: devuelve query base filtrada por torneo (compatible con docs sin campo "torneo" = "pueblo")
+function queryTorneo(coleccion) {
+    return db.collection(coleccion).where('torneo', '==', torneoActual);
+}
+
+// Config doc específica por torneo (evita colisión entre torneos)
+function configDocId(nombre) {
+    return `${nombre}_${torneoActual}`;
+}
+
+// Funciones para escudos automáticos
+function normalizarNombre(nombre) {
+    if (!nombre) return 'default';
+    return nombre
+      .replace(/\s*\(.*?\)/g, "")      // Elimina los paréntesis y su contenido
+      .toLowerCase()                   // Pasa todo a minúsculas
+      .replace(/\./g, "")              // Elimina puntos (ej: F.B.C -> fbc)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Elimina tildes y acentos
+      .replace(/[^a-z0-9]+/g, "-")     // Reemplaza espacios y símbolos por guiones
+      .replace(/^-+|-+$/g, "");        // Limpia guiones en los extremos
+}
+
+// Manejador global de errores para imágenes caídas (No inline)
+document.addEventListener('error', function (e) {
+    const target = e.target;
+    if (target.tagName && target.tagName.toLowerCase() === 'img') {
+        const fallbackSrc = target.getAttribute('data-fallback');
+        const defaultImg = '/img/escudos/default.png';
+        
+        // Si hay un fallback guardado y no lo hemos probado aún, intentamos el nombre base
+        if (fallbackSrc && !target.src.includes(fallbackSrc) && !target.src.includes(defaultImg)) {
+            console.log(`Fallback 1 ejecutado para: ${target.alt} -> Intentando: ${fallbackSrc}`);
+            target.src = fallbackSrc;
+        } 
+        // Si el fallback también falla, o no hay fallback, probamos el default
+        else if (!target.src.includes(defaultImg)) {
+            console.log(`Fallback 2 ejecutado para: ${target.alt} -> Intentando: ${defaultImg}`);
+            target.src = defaultImg;
+        }
+    }
+}, true); // Modo captura para interceptar antes
+
+function normalizarNombre(nombre) {
+    if (!nombre) return 'default';
+    return nombre
+      .toLowerCase()                   // 1. Pasa todo a minúsculas
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // 2. Elimina tildes y acentos
+      .replace(/\./g, "")              // 3. Elimina puntos (ej: F.B.C. -> fbc)
+      .replace(/\(/g, " ")             // 4. Reemplaza "(" por espacio
+      .replace(/\)/g, "")              // 5. Elimina ")"
+      .replace(/[^a-z0-9]+/g, "-")     // 6. Reemplaza espacios y símbolos por guiones
+      .replace(/-+/g, "-")             // 7. Evita guiones dobles
+      .replace(/^-+|-+$/g, "");        // 8. Limpia guiones en los extremos
+}
+
+function getEscudo(nombre) {
+    const key = normalizarNombre(nombre);
+    const ruta = `/img/escudos/${key}.png`;
+    
+    // Inteligencia para fallback: obtenemos la versión genérica (sin localidad)
+    let nombreBase = nombre.replace(/\s*\(.*?\)/g, ""); // "Social (González)" -> "Social"
+    let keyBase = normalizarNombre(nombreBase);
+    const rutaBase = `/img/escudos/${keyBase}.png`;
+
+    console.log("Equipo:", nombre);
+    console.log("Archivo generado:", key);
+
+    return `
+      <div class="escudo-container">
+        <img src="${ruta}" alt="${nombre}" data-fallback="${rutaBase}">
+      </div>
+    `;
+}
+
+// ===== DETECCIÓN DE PÁGINA =====
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('user-main')) {
+        initUserApp();
+    } else if (document.getElementById('admin-main')) {
+        initAdminApp();
+    }
+});
+
+// ==========================================
+// ========== LÓGICA DEL USUARIO ============
+// ==========================================
+
+// ─── HANDLER "COMPLETAR REGISTRO" — abre WhatsApp con datos del usuario ──────
+document.addEventListener('DOMContentLoaded', function() {
+    const btnRegistrarse = document.getElementById('btn-registrarse');
+    if (btnRegistrarse) {
+        btnRegistrarse.addEventListener('click', function () {
+            const nombre = document.getElementById('nombre').value.trim();
+            const telefono = document.getElementById('whatsapp').value.trim();
+
+            if (!nombre || !telefono) {
+                alert('Completá tus datos primero');
+                return;
+            }
+
+            const mensaje = `Hola! Quiero participar del Prode del Pueblo.%0A%0ANombre: ${nombre}%0ATeléfono: ${telefono}%0A%0AYa realicé el pago, te envío comprobante.`;
+            const url = `https://wa.me/5491164050369?text=${mensaje}`;
+            window.open(url, '_blank');
+        });
+    }
+});
+
+// ─── CAMBIO DE TAB TORNEO (override para mostrar/ocultar secciones) ────────
+// El cambiarTorneo original en la parte de arriba maneja el admin.
+// Para el user-main, además mostramos la sección correcta.
+const _cambiarTorneoOriginal = window.cambiarTorneo;
+window.cambiarTorneo = function(torneo) {
+    torneoActual = torneo;
+
+    // Actualizar estado visual de pestañas
+    document.querySelectorAll('.tab-torneo').forEach(btn => {
+        btn.classList.toggle('tab-activa', btn.dataset.torneo === torneo);
+    });
+
+    if (document.getElementById('user-main')) {
+        const seccionPueblo = document.getElementById('seccion-pueblo');
+        const seccionMundial = document.getElementById('seccion-mundial');
+
+        if (torneo === 'mundial') {
+            // Mostrar sección "Próximamente"
+            if (seccionPueblo) seccionPueblo.style.display = 'none';
+            if (seccionMundial) {
+                seccionMundial.style.display = 'block';
+                seccionMundial.style.animation = 'fadeSlideUp 0.5s ease both';
+            }
+            // Aplicar tema mundial al body
+            document.body.classList.add('modo-mundial');
+        } else {
+            // Mostrar sección Pueblo
+            if (seccionMundial) seccionMundial.style.display = 'none';
+            if (seccionPueblo) {
+                seccionPueblo.style.display = 'block';
+                seccionPueblo.style.animation = 'fadeSlideUp 0.5s ease both';
+            }
+            document.body.classList.remove('modo-mundial');
+            // Recargar datos pueblo
+            cargarPartidosUsuario();
+            cargarConfigGolUser();
+            cargarRanking();
+        }
+    } else if (document.getElementById('admin-main')) {
+        poblarFormularioTorneo(torneo);
+        cargarPartidosAdmin();
+        cargarUsuariosAdmin();
+        cargarConfigGolAdmin();
+        const btnCerrar = document.getElementById('btn-cerrar-fecha');
+        if (btnCerrar) {
+            db.collection('config').doc(configDocId('estado')).get().then(doc => {
+                btnCerrar.textContent = (doc.exists && doc.data().fechaCerrada) ? "Abrir Fecha Global" : "Cerrar Fecha Global";
+            }).catch(() => {});
+        }
+    }
+};
+
+async function initUserApp() {
+    await cargarPartidosUsuario();
+    await cargarConfigGolUser();
+    await cargarRanking();
+
+    const btnParticipar = document.getElementById('btn-participar');
+    btnParticipar.addEventListener('click', enviarPredicciones);
+}
+
+async function cargarPartidosUsuario() {
+    const listDiv = document.getElementById('partidos-list');
+    listDiv.innerHTML = '<p>Cargando partidos...</p>';
+
+    try {
+        const snapshot = await queryTorneo('partidos').get();
+        if (snapshot.empty) {
+            listDiv.innerHTML = '<p>No hay partidos disponibles aún.</p>';
+            return;
+        }
+
+        // Ordenar en JS para evitar problemas de índices compuestos en Firebase
+        let partidosArray = [];
+        snapshot.forEach(doc => partidosArray.push({ id: doc.id, ...doc.data() }));
+        
+        partidosArray.sort((a, b) => {
+            const jA = a.jornada || 0;
+            const jB = b.jornada || 0;
+            if (jA !== jB) return jA - jB;
+            
+            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3 };
+            const catA = catOrder[a.categoria || "Primera"] || 99;
+            const catB = catOrder[b.categoria || "Primera"] || 99;
+            if (catA !== catB) return catA - catB;
+
+            return new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
+        });
+
+        let html = '';
+        partidosGlobal = [];
+        let algunCerrado = false;
+        let jornadaActual = null;
+        let categoriaActual = null;
+        const ahora = Date.now();
+
+        // Verificar estado global de cierre de fecha
+        let fechaCerradaGlobal = false;
+        try {
+            const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
+            if (estadoDoc.exists && estadoDoc.data().fechaCerrada) {
+                fechaCerradaGlobal = true;
+            }
+        } catch (e) { console.error("Error al leer estado global:", e); }
+
+        partidosArray.forEach(partido => {
+            partidosGlobal.push(partido);
+            
+            const dateObj = new Date(partido.fecha);
+            const fechaPartido = dateObj.getTime();
+            const diaStr = dateObj.toLocaleDateString('es-AR', { dateStyle: 'short' });
+            const horaStr = dateObj.toLocaleTimeString('es-AR', { timeStyle: 'short' });
+
+            if (partido.jornada !== jornadaActual) {
+                jornadaActual = partido.jornada;
+                html += `<div class="fecha-header">🏆 JORNADA ${jornadaActual || '?'}</div>`;
+                categoriaActual = null; // Reiniciar categoría al cambiar la jornada
+            }
+
+            const cat = partido.categoria || "Primera";
+            if (cat !== categoriaActual) {
+                categoriaActual = cat;
+                html += `<h2 class="categoria-title">${categoriaActual}</h2>`;
+            }
+
+            const imgLocal = getEscudo(partido.local);
+            const imgVisitante = getEscudo(partido.visitante);
+            
+            // Auto-cerrar de forma robusta por timestamp
+            let cerrado = fechaCerradaGlobal || partido.cerrado || (fechaPartido < ahora);
+            if (cerrado) algunCerrado = true;
+            const disabledAttr = cerrado ? 'disabled' : '';
+            
+            // Etiqueta visual para partido doble
+            const esDoble = (partido.local === "Independiente (América)" || partido.visitante === "Independiente (América)");
+            const badgeDoble = esDoble ? '<span style="background: #ef4444; color: white; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.7rem; font-weight: bold; margin-left: 0.5rem; letter-spacing: 0.5px; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);">🔥 x2 PUNTOS</span>' : '';
+
+            html += `
+                <div class="partido-item ${cerrado ? 'partido-cerrado' : ''}" data-id="${partido.id}">
+                    <div class="partido-hora">📅 ${diaStr} - ⏰ ${horaStr} ${badgeDoble} ${cerrado ? '<span class="badge-cerrado">CERRADO</span>' : ''}</div>
+                    <div class="partido-content" style="flex-direction: column;">
+                        <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
+                            <div class="equipo-block local" style="flex:1;">
+                                ${imgLocal}
+                                <span class="equipo-name" style="text-align: center;">${partido.local}</span>
+                            </div>
+                            <div class="equipo-block visitante" style="flex:1;">
+                                ${imgVisitante}
+                                <span class="equipo-name" style="text-align: center;">${partido.visitante}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="opciones-resultado">
+                            <label class="btn-prediccion">
+                                <input type="radio" name="res_${partido.id}" value="local" class="radio-prediccion" ${disabledAttr}>
+                                <span>Local</span>
+                            </label>
+                            <label class="btn-prediccion">
+                                <input type="radio" name="res_${partido.id}" value="empate" class="radio-prediccion" ${disabledAttr}>
+                                <span>Empate</span>
+                            </label>
+                            <label class="btn-prediccion">
+                                <input type="radio" name="res_${partido.id}" value="visitante" class="radio-prediccion" ${disabledAttr}>
+                                <span>Visitante</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        listDiv.innerHTML = html;
+        
+        const btn = document.getElementById('btn-participar');
+        if (fechaCerradaGlobal && btn) {
+            btn.disabled = true;
+            btn.textContent = 'Fecha Cerrada';
+            
+            // Obtener Top 3 para mostrar en el banner desde el HISTORIAL
+            let ganadorHtml = '';
+            try {
+                const historialSnap = await queryTorneo('historial_fechas').orderBy('fechaCierre', 'desc').limit(1).get();
+                if (!historialSnap.empty) {
+                    const historialData = historialSnap.docs[0].data();
+                    const topUsers = historialData.ranking || [];
+                    const tituloFecha = historialData.fecha || "Última Fecha";
+                    
+                    if (topUsers.length > 0) {
+                        const top1 = topUsers[0];
+                        ganadorHtml = `<div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">
+                            <div style="font-size: 1.3em; margin-bottom: 5px; color: #eab308;">🏆 <strong>Resultados - ${tituloFecha}:</strong></div>
+                            <div style="font-size: 1.5em; font-weight: bold; margin-bottom: 10px;">${top1.nombre} <span style="font-size: 0.8em; color: #ddd;">(${top1.puntos} pts)</span></div>`;
+                        
+                        if (topUsers.length > 1) {
+                             ganadorHtml += `<div style="font-size: 0.9em; color: #ccc;">
+                                🥈 2º: ${topUsers[1].nombre} (${topUsers[1].puntos} pts)
+                                ${topUsers[2] ? `&nbsp;&nbsp;|&nbsp;&nbsp;🥉 3º: ${topUsers[2].nombre} (${topUsers[2].puntos} pts)` : ''}
+                             </div>`;
+                        }
+                        ganadorHtml += `</div>`;
+                    }
+                } else {
+                    // Manejo del caso donde aún no hay historial (primer uso)
+                    ganadorHtml = `<div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 1em; color: #ccc;">Los resultados finales estarán disponibles pronto.</div>
+                    </div>`;
+                }
+            } catch(e) { console.error("Error cargando historial de ganadores", e); }
+
+            listDiv.insertAdjacentHTML('afterbegin', `<div style="background:var(--accent); color:white; padding:15px; border-radius:8px; text-align:center; font-weight:bold; margin-bottom:15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                La fecha ha sido cerrada. Ya no se aceptan predicciones.
+                ${ganadorHtml}
+            </div>`);
+        } else if (algunCerrado) {
+             // Si todos están cerrados, o para mantener simple, no deshabilitamos el botón, pero sí se envían los que se pueden.
+        }
+    } catch (error) {
+        console.error("Error cargando partidos:", error);
+        listDiv.innerHTML = '<p>Error al cargar. Verificá tu conexión.</p>';
+    }
+}
+
+async function enviarPredicciones() {
+    const nombre = document.getElementById('nombre').value.trim();
+    const whatsapp = document.getElementById('whatsapp').value.trim();
+
+    if (!nombre || !whatsapp) {
+        alert("Por favor completá tu nombre y WhatsApp.");
+        return;
+    }
+
+    // 🛑 VALIDACIÓN DE USUARIO EXISTENTE POR WHATSAPP
+    try {
+        const existUser = await queryTorneo('usuarios').where('whatsapp', '==', whatsapp).get();
+        if (!existUser.empty) {
+            alert("Ya existe una participación con este número de WhatsApp. No podés participar dos veces.");
+            return;
+        }
+    } catch(err) {
+        console.error("Error al validar WhatsApp:", err);
+    }
+
+    const items = document.querySelectorAll('.partido-item');
+    const predicciones = [];
+    let incompletos = false;
+
+    items.forEach(item => {
+        const pId = item.getAttribute('data-id');
+        const pInfo = partidosGlobal.find(p => p.id === pId);
+        if (!pInfo) return;
+
+        // Validación Anti-Trampa backend-side (JS logical block)
+        const ahora = Date.now();
+        const fechaPartido = new Date(pInfo.fecha).getTime();
+        const isClosed = pInfo.cerrado || (fechaPartido < ahora);
+        
+        if (isClosed) return; // Se descarta cualquier input inyectado si ya está cerrado
+
+        const radioChecked = item.querySelector(`input[name="res_${pId}"]:checked`);
+        if (!radioChecked) {
+            incompletos = true;
+        } else {
+            predicciones.push({
+                partidoId: pId,
+                resultado: radioChecked.value
+            });
+        }
+    });
+
+    if (incompletos) {
+        alert("Completá todos los resultados antes de participar.");
+        return;
+    }
+
+    // Obtener prediccion gol y validar si aplica
+    let prediccionGolValor = null;
+    const golContainer = document.getElementById('gol-fecha-container');
+    if (golContainer && golContainer.style.display !== 'none' && golContainer.dataset.cerrado !== "true") {
+        const golRadios = document.getElementsByName('prediccion-gol');
+        let respondido = false;
+        for (const radio of golRadios) {
+            if (radio.checked) {
+                prediccionGolValor = (radio.value === 'si');
+                respondido = true;
+            }
+        }
+        if (!respondido) {
+            alert("Debes responder si el jugador de la fecha hace gol o no.");
+            return;
+        }
+    }
+
+    const btn = document.getElementById('btn-participar');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+
+        // 1. Guardar usuario
+        const userRef = await db.collection('usuarios').add({
+            nombre: nombre,
+            whatsapp: whatsapp,
+            activo: true,          // siempre acceso a la app
+            pagoConfirmado: false, // solo admin lo cambia a true
+            intentoPago: false,    // se actualiza a true si presiona "Ya pagué"
+            puntos: 0,
+            torneo: torneoActual,
+            fechaRegistro: firebase.firestore.FieldValue.serverTimestamp(),
+            prediccionGol: prediccionGolValor,
+            jugadorGol: document.getElementById('gol-fecha-jugador').innerText
+        });
+
+        const userId = userRef.id;
+
+        // 2. Guardar predicciones en batch
+        const batch = db.batch();
+        predicciones.forEach(pred => {
+            const docRef = db.collection('predicciones').doc();
+            batch.set(docRef, {
+                userId: userId,
+                torneo: torneoActual,
+                ...pred
+            });
+        });
+
+        await batch.commit();
+
+        alert("¡Tus predicciones fueron enviadas con éxito! Buena suerte.");
+        document.getElementById('registro-form').reset();
+        
+        // Limpiar inputs
+        document.querySelectorAll('.input-goles').forEach(inp => inp.value = "");
+        
+        // Abrir WhatsApp
+        const mensaje = `Hola! Soy ${nombre} y ya cargué mi prode ⚽`;
+        const url = `https://wa.me/5492392584053?text=${encodeURIComponent(mensaje)}`;
+        window.open(url, '_blank');
+
+    } catch (error) {
+        console.error("Error guardando:", error);
+        alert("Hubo un error al guardar. Intentá de nuevo.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '¡Participar!';
+    }
+}
+
+async function cargarRanking() {
+    const rankingDiv = document.getElementById('ranking-list');
+    try {
+        const snapshot = await queryTorneo('usuarios').get();
+        if (snapshot.empty) {
+            rankingDiv.innerHTML = '<p>Aún no hay participantes.</p>';
+            return;
+        }
+
+        let users = [];
+        snapshot.forEach(doc => users.push(doc.data()));
+
+        // 🔑 FILTRAR: solo usuarios con pago confirmado aparecen en el ranking
+        const usersConPago = users.filter(u => u.pagoConfirmado === true);
+
+        if (usersConPago.length === 0) {
+            rankingDiv.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:1rem;">Aún no hay participantes con pago confirmado.</p>';
+            return;
+        }
+
+        // Ordenar por puntos
+        usersConPago.sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
+
+        let html = '';
+        let pos = 1;
+        usersConPago.forEach(user => {
+            let topClass = '';
+            if (pos === 1) topClass = 'ranking-top1';
+            else if (pos === 2) topClass = 'ranking-top2';
+            else if (pos === 3) topClass = 'ranking-top3';
+
+            const posEmoji = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : pos;
+
+            html += `
+                <div class="ranking-item ${topClass}">
+                    <div class="ranking-pos">${posEmoji}</div>
+                    <div class="ranking-name">${user.nombre} <span style="color:var(--primary); font-size:0.75rem;" title="Pago confirmado">✔</span></div>
+                    <div class="ranking-pts">
+                        <span class="pts-number">${user.puntos || 0}</span>
+                        <span class="pts-exactos">pts</span>
+                    </div>
+                </div>
+            `;
+            pos++;
+        });
+        rankingDiv.innerHTML = html;
+    } catch (error) {
+        console.error("Error cargando ranking:", error);
+        rankingDiv.innerHTML = '<p>Error al cargar el ranking.</p>';
+    }
+}
+
+
+async function cargarConfigGolUser() {
+    try {
+        const doc = await db.collection('config').doc(configDocId('general')).get();
+        if (doc.exists) {
+            const data = doc.data();
+            if (data.jugadorGol) {
+                const container = document.getElementById('gol-fecha-container');
+                container.style.display = 'block';
+                document.getElementById('gol-fecha-jugador').innerText = data.jugadorGol;
+
+                if (data.cerrado) {
+                    document.getElementById('gol-fecha-jugador').innerText += " (CERRADA)";
+                    document.getElementById('gol-fecha-jugador').style.color = "var(--accent)";
+                    const radios = document.getElementsByName('prediccion-gol');
+                    radios.forEach(r => {
+                        r.disabled = true;
+                        // Estilo visual apagado
+                        r.parentElement.querySelector('.radio-btn').style.opacity = "0.5";
+                        r.parentElement.querySelector('.radio-btn').style.cursor = "not-allowed";
+                    });
+                    container.dataset.cerrado = "true";
+                }
+            }
+        }
+    } catch(e) {
+        console.error("Error config gol:", e);
+    }
+}
+
+// ==========================================
+// ========== LÓGICA DEL ADMIN ============
+// ==========================================
+
+// ─────────────────────────────────────────────────────────────────
+//  HELPERS DE FORMULARIO — selects dinámicos por torneo
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Construye las <option> de un select de equipo a partir de equiposPorCategoria.
+ * Si el torneo tiene múltiples categorías, genera <optgroup> por categoría.
+ * Si tiene una sola (ej: "General"), las inyecta planas.
+ * @param {HTMLSelectElement} selectEl
+ * @param {string} torneoId
+ * @param {string} [valorSeleccionado] - para preseleccionar al editar
+ */
+function poblarSelectEquipos(selectEl, torneoId, valorSeleccionado = '') {
+    const equiposPorCat = getEquiposPorCategoria(torneoId);
+    const categorias = Object.keys(equiposPorCat);
+    const usarGrupos = categorias.length > 1;
+
+    // Limpiar opciones previas (conservar el placeholder vacío)
+    selectEl.innerHTML = '<option value="">— Seleccioná un equipo —</option>';
+
+    categorias.forEach(cat => {
+        const equipos = equiposPorCat[cat];
+        if (!equipos || equipos.length === 0) return;
+
+        if (usarGrupos) {
+            const group = document.createElement('optgroup');
+            group.label = cat;
+            equipos.forEach(eq => {
+                const opt = document.createElement('option');
+                opt.value = eq;
+                opt.textContent = eq;
+                if (eq === valorSeleccionado) opt.selected = true;
+                group.appendChild(opt);
+            });
+            selectEl.appendChild(group);
+        } else {
+            // Lista plana (ej: Mundial → General)
+            equipos.forEach(eq => {
+                const opt = document.createElement('option');
+                opt.value = eq;
+                opt.textContent = eq;
+                if (eq === valorSeleccionado) opt.selected = true;
+                selectEl.appendChild(opt);
+            });
+        }
+    });
+}
+
+/**
+ * Construye las <option> del select de categorías.
+ * @param {HTMLSelectElement} selectEl
+ * @param {string} torneoId
+ * @param {string} [valorSeleccionado]
+ */
+function poblarSelectCategorias(selectEl, torneoId, valorSeleccionado = '') {
+    const categorias = getCategorias(torneoId);
+    selectEl.innerHTML = '';
+    categorias.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        if (cat === valorSeleccionado) opt.selected = true;
+        selectEl.appendChild(opt);
+    });
+}
+
+/**
+ * Actualiza todo el formulario de partido según el torneo activo:
+ *   - Muestra/oculta el campo de categoría
+ *   - Repuebla selects de equipos y categorías
+ * Llamar al cargar el admin y al cambiar de torneo.
+ * @param {string} torneoId
+ * @param {object} [valoresEdicion] - { local, visitante, categoria } al editar un partido
+ */
+function poblarFormularioTorneo(torneoId, valoresEdicion = {}) {
+    const grupoCat = document.getElementById('grupo-categoria');
+    const selectCat = document.getElementById('partido-categoria');
+    const selectLocal = document.getElementById('partido-local');
+    const selectVisitante = document.getElementById('partido-visitante');
+
+    if (!selectLocal || !selectVisitante) return; // No estamos en el admin
+
+    const tieneCats = torneoTieneCategorias(torneoId);
+
+    // Mostrar/ocultar categorías
+    if (grupoCat) grupoCat.style.display = tieneCats ? 'block' : 'none';
+
+    // Poblar categorías (solo si aplica)
+    if (tieneCats && selectCat) {
+        poblarSelectCategorias(selectCat, torneoId, valoresEdicion.categoria || '');
+    }
+
+    // Poblar equipos en ambos selects
+    poblarSelectEquipos(selectLocal, torneoId, valoresEdicion.local || '');
+    poblarSelectEquipos(selectVisitante, torneoId, valoresEdicion.visitante || '');
+
+    // Attach validación anti-mismo-equipo (una sola vez)
+    if (!selectLocal.dataset.validacionAdjuntada) {
+        const validarMismoEquipo = () => {
+            const errorEl = document.getElementById('error-mismo-equipo');
+            const btnSubmit = document.getElementById('btn-submit-partido');
+            const mismoEquipo = selectLocal.value &&
+                                selectVisitante.value &&
+                                selectLocal.value === selectVisitante.value;
+
+            if (errorEl) errorEl.style.display = mismoEquipo ? 'block' : 'none';
+            if (btnSubmit) btnSubmit.disabled = mismoEquipo;
+        };
+        selectLocal.addEventListener('change', validarMismoEquipo);
+        selectVisitante.addEventListener('change', validarMismoEquipo);
+        selectLocal.dataset.validacionAdjuntada = 'true';
+    }
+}
+
+async function initAdminApp() {
+    // Inicializar formulario dinámico según el torneo activo al cargar
+    poblarFormularioTorneo(torneoActual);
+
+    document.getElementById('crear-partido-form').addEventListener('submit', guardarPartido);
+    document.getElementById('btn-calcular-puntos').addEventListener('click', calcularPuntos);
+    
+    const btnReset = document.getElementById('btn-resetear-fecha');
+    if (btnReset) btnReset.addEventListener('click', resetearFecha);
+    
+    const btnCerrarFecha = document.getElementById('btn-cerrar-fecha');
+    if (btnCerrarFecha) {
+        btnCerrarFecha.addEventListener('click', toggleCierreGlobal);
+        // Cargar estado inicial del botón
+        db.collection('config').doc(configDocId('estado')).get().then(doc => {
+            if (doc.exists && doc.data().fechaCerrada) {
+                btnCerrarFecha.textContent = "Abrir Fecha Global";
+            }
+        }).catch(err => console.error(err));
+    }
+    
+    const configForm = document.getElementById('config-gol-form');
+    if (configForm) configForm.addEventListener('submit', guardarConfigGol);
+
+    await cargarPartidosAdmin();
+    await cargarUsuariosAdmin();
+    await cargarConfigGolAdmin();
+}
+
+async function guardarPartido(e) {
+    e.preventDefault();
+    const id = document.getElementById('partido-edit-id').value;
+    const jornada = parseInt(document.getElementById('partido-jornada').value);
+    const local = document.getElementById('partido-local').value;
+    const visitante = document.getElementById('partido-visitante').value;
+    const fecha = document.getElementById('partido-fecha').value;
+
+    // Categoría: solo aplica si el torneo la usa; si no, guardamos "General"
+    const tieneCats = torneoTieneCategorias(torneoActual);
+    const selectCat = document.getElementById('partido-categoria');
+    const categoria = tieneCats && selectCat ? selectCat.value : 'General';
+
+    // Validación final anti-mismo-equipo (doble seguridad)
+    if (local && visitante && local === visitante) {
+        const errorEl = document.getElementById('error-mismo-equipo');
+        if (errorEl) errorEl.style.display = 'block';
+        alert('El local y el visitante no pueden ser el mismo equipo.');
+        return;
+    }
+
+    if (!local || !visitante) {
+        alert('Seleccioná ambos equipos antes de guardar.');
+        return;
+    }
+
+    try {
+        if (id) {
+            await db.collection('partidos').doc(id).update({
+                jornada, categoria, local, visitante, fecha
+            });
+            alert('Partido actualizado exitosamente');
+        } else {
+            await db.collection('partidos').add({
+                jornada, categoria, local, visitante, fecha, cerrado: false, torneo: torneoActual
+            });
+            alert('Partido creado exitosamente');
+        }
+        
+        cancelarEdicion();
+        cargarPartidosAdmin();
+    } catch (error) {
+        console.error("Error:", error);
+        alert('Error al guardar partido');
+    }
+}
+
+window.editarPartido = function(id) {
+    const p = partidosGlobalAdmin.find(x => x.id === id);
+    if (!p) return;
+
+    // Pre-poblar el formulario con los valores del partido a editar
+    // (incluyendo preselección de los selects de equipos y categoría)
+    poblarFormularioTorneo(torneoActual, {
+        local: p.local,
+        visitante: p.visitante,
+        categoria: p.categoria || '',
+    });
+
+    document.getElementById('partido-edit-id').value = p.id;
+    document.getElementById('partido-jornada').value = p.jornada || 1;
+    document.getElementById('partido-fecha').value = p.fecha;
+    document.getElementById('titulo-form-partido').innerText = 'Editar Partido';
+    document.getElementById('btn-cancel-edit').style.display = 'inline-block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.cancelarEdicion = function() {
+    document.getElementById('crear-partido-form').reset();
+    document.getElementById('partido-edit-id').value = '';
+    document.getElementById('titulo-form-partido').innerText = 'Crear Partido';
+    document.getElementById('btn-cancel-edit').style.display = 'none';
+    // Limpiar error de mismo equipo
+    const errorEl = document.getElementById('error-mismo-equipo');
+    if (errorEl) errorEl.style.display = 'none';
+    // Re-poblar selects de equipos sin preselección (formulario limpio)
+    poblarFormularioTorneo(torneoActual);
+}
+
+window.eliminarPartido = async function(id) {
+    if (!confirm("¿Seguro querés eliminar este partido? También se borrarán sus resultados reales.")) return;
+    try {
+        await db.collection('partidos').doc(id).delete();
+        // Borrar resultados asociados
+        const resSnapshot = await db.collection('resultados').where('partidoId', '==', id).get();
+        const batch = db.batch();
+        resSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        alert("Partido eliminado.");
+        cargarPartidosAdmin();
+    } catch (err) {
+        console.error("Error:", err);
+        alert("Error al eliminar.");
+    }
+}
+
+async function cargarPartidosAdmin() {
+    const listDiv = document.getElementById('admin-partidos-list');
+    listDiv.innerHTML = '<p>Cargando...</p>';
+
+    try {
+        const snapshot = await queryTorneo('partidos').get();
+        if (snapshot.empty) {
+            listDiv.innerHTML = '<p>No hay partidos.</p>';
+            return;
+        }
+
+        let partidosArray = [];
+        snapshot.forEach(doc => partidosArray.push({ id: doc.id, ...doc.data() }));
+        
+        partidosArray.sort((a, b) => {
+            const jA = a.jornada || 0;
+            const jB = b.jornada || 0;
+            if (jA !== jB) return jA - jB;
+            
+            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3 };
+            const catA = catOrder[a.categoria || "Primera"] || 99;
+            const catB = catOrder[b.categoria || "Primera"] || 99;
+            if (catA !== catB) return catA - catB;
+
+            return new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
+        });
+
+        const resSnapshot = await queryTorneo('resultados').get();
+        const resultadosMap = {};
+        resSnapshot.forEach(doc => {
+            resultadosMap[doc.data().partidoId] = doc.data();
+        });
+
+        let html = '';
+        partidosGlobalAdmin = partidosArray;
+        const ahora = Date.now();
+
+        partidosArray.forEach(p => {
+            const pId = p.id;
+            
+            const res = resultadosMap[pId] || { resultado: '' };
+            const isAutoClosed = new Date(p.fecha).getTime() < ahora;
+            const esDoble = (p.local === "Independiente (América)" || p.visitante === "Independiente (América)");
+            const badgeDoble = esDoble ? '<span style="color:#ef4444; font-size:0.8rem; font-weight:bold; margin-left: 5px;">🔥 x2</span>' : '';
+
+            html += `
+                <div class="partido-item">
+                    <div class="partido-equipos" style="flex-direction:column; align-items:start;">
+                        <div style="width:100%; display:flex; justify-content:space-between; align-items: center;">
+                            <span><strong style="color:var(--primary)">J${p.jornada || '?'} (${p.categoria || "Primera"})</strong> | <strong>${p.local} vs ${p.visitante}</strong> ${badgeDoble} ${isAutoClosed ? '<span style="color:var(--accent); font-size:0.8rem; margin-left:5px;">(CERRADO POR FECHA)</span>' : ''}</span>
+                            <label style="font-size:0.8rem; cursor:pointer;">
+                                <input type="checkbox" onchange="togglePartidoCerrado('${pId}', this.checked)" ${p.cerrado ? 'checked' : ''}> Forzar Cierre
+                            </label>
+                        </div>
+                        <div style="margin-top: 5px;">
+                            <button onclick="editarPartido('${pId}')" style="background: none; border: none; color: var(--secondary); cursor: pointer; text-decoration: underline; padding: 0; font-size: 0.8rem; margin-right: 10px;">Editar</button>
+                            <button onclick="eliminarPartido('${pId}')" style="background: none; border: none; color: var(--accent); cursor: pointer; text-decoration: underline; padding: 0; font-size: 0.8rem;">Eliminar</button>
+                        </div>
+                    </div>
+                    <div class="partido-inputs" style="margin-top:10px; width: 100%; display: flex; align-items: center;">
+                        <select id="res-${pId}" style="padding: 0.5rem; flex: 1; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-color);">
+                            <option value="">Seleccionar resultado real...</option>
+                            <option value="local" ${res.resultado === 'local' ? 'selected' : ''}>Gana Local</option>
+                            <option value="empate" ${res.resultado === 'empate' ? 'selected' : ''}>Empate</option>
+                            <option value="visitante" ${res.resultado === 'visitante' ? 'selected' : ''}>Gana Visitante</option>
+                        </select>
+                        <button onclick="guardarResultado('${pId}')" class="btn-secondary" style="padding:0.5rem; margin-left:10px;">Guardar</button>
+                    </div>
+                </div>
+            `;
+        });
+        listDiv.innerHTML = html;
+    } catch (error) {
+        console.error("Error:", error);
+    }
+}
+
+window.togglePartidoCerrado = async function(partidoId, isClosed) {
+    try {
+        await db.collection('partidos').doc(partidoId).update({ cerrado: isClosed });
+    } catch (err) {
+        console.error("Error al cerrar partido:", err);
+    }
+}
+
+// Global function para el botón "Guardar" en la lista de admin
+window.guardarResultado = async function(partidoId) {
+    const r = document.getElementById(`res-${partidoId}`).value;
+
+    if (!r) {
+        alert("Seleccioná un resultado");
+        return;
+    }
+
+    try {
+        // Buscar si ya existe resultado para actualizarlo
+        const snapshot = await db.collection('resultados').where('partidoId', '==', partidoId).where('torneo', '==', torneoActual).get();
+        if (!snapshot.empty) {
+            await db.collection('resultados').doc(snapshot.docs[0].id).update({
+                resultado: r
+            });
+        } else {
+            await db.collection('resultados').add({
+                partidoId: partidoId,
+                resultado: r,
+                torneo: torneoActual
+            });
+        }
+        alert("Resultado guardado");
+        cargarPartidosAdmin(); // recargar
+    } catch (error) {
+        console.error("Error:", error);
+        alert("Error al guardar");
+    }
+}
+
+async function cargarUsuariosAdmin() {
+    const tbody = document.getElementById('usuarios-tbody');
+    try {
+        const snapshot = await queryTorneo('usuarios').get();
+        if (snapshot.empty) {
+            tbody.innerHTML = '<tr><td colspan="5">No hay usuarios.</td></tr>';
+            return;
+        }
+
+        let users = [];
+        snapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
+
+        users.sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
+
+        let html = '';
+        users.forEach(u => {
+            const uId = u.id;
+            const intentoBadge = u.intentoPago
+                ? '<span style="background:rgba(251,191,36,0.2); color:#fbbf24; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:700;">💸 Avisó</span>'
+                : '<span style="color:var(--text-muted); font-size:0.75rem;">—</span>';
+
+            const pagoBtn = u.pagoConfirmado
+                ? `<button onclick="togglePago('${uId}', false)" style="background:linear-gradient(135deg,#22c55e,#15803d); color:white; border:none; border-radius:8px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; letter-spacing:0.5px;">✔ Pagado</button>`
+                : `<button onclick="togglePago('${uId}', true)" style="background:rgba(255,255,255,0.07); color:var(--text-muted); border:1px solid var(--card-border); border-radius:8px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; letter-spacing:0.5px;">Marcar Pagado</button>`;
+
+            html += `
+                <tr id="row-${uId}">
+                    <td>${u.nombre}</td>
+                    <td><a href="https://wa.me/${u.whatsapp}" target="_blank">${u.whatsapp}</a></td>
+                    <td>${u.puntos || 0}</td>
+                    <td style="text-align:center;">${intentoBadge}</td>
+                    <td style="text-align:center;">${pagoBtn}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    } catch (error) {
+        console.error("Error:", error);
+    }
+}
+
+window.togglePago = async function(userId, isChecked) {
+    try {
+        await db.collection('usuarios').doc(userId).update({
+            pagoConfirmado: isChecked
+        });
+        // Refrescar tabla para mostrar estado actualizado
+        await cargarUsuariosAdmin();
+    } catch (error) {
+        console.error("Error:", error);
+        alert("Error actualizando pago");
+    }
+}
+
+async function calcularPuntos() {
+    const btn = document.getElementById('btn-calcular-puntos');
+    btn.disabled = true;
+    btn.textContent = "Calculando...";
+
+    try {
+        // 1. Obtener resultados reales
+        const resSnapshot = await queryTorneo('resultados').get();
+        const resultadosMap = {};
+        resSnapshot.forEach(doc => {
+            const data = doc.data();
+            resultadosMap[data.partidoId] = data;
+        });
+
+        // 2. Obtener usuarios
+        const usersSnapshot = await queryTorneo('usuarios').get();
+        
+        // 3. Obtener todas las predicciones
+        const predSnapshot = await queryTorneo('predicciones').get();
+        const prediccionesPorUser = {};
+        predSnapshot.forEach(doc => {
+            const p = doc.data();
+            if (!prediccionesPorUser[p.userId]) {
+                prediccionesPorUser[p.userId] = [];
+            }
+            prediccionesPorUser[p.userId].push(p);
+        });
+
+        // 3.2 Obtener info de los partidos para la regla de puntos dobles
+        const partSnapshot = await queryTorneo('partidos').get();
+        const partidosDataMap = {};
+        partSnapshot.forEach(doc => {
+            partidosDataMap[doc.id] = doc.data();
+        });
+
+        // 3.5 Obtener config de gol para calcular
+        let jugadorGolHizo = null;
+        const configDoc = await db.collection('config').doc(configDocId('general')).get();
+        if (configDoc.exists) {
+            const val = configDoc.data().hizoGol;
+            if (val === 'si') jugadorGolHizo = true;
+            if (val === 'no') jugadorGolHizo = false;
+        }
+
+        // 4. Calcular puntos
+        const batch = db.batch();
+
+        usersSnapshot.forEach(userDoc => {
+            const userId = userDoc.id;
+            const userData = userDoc.data();
+            
+            // 💰 SOLO SUMAR PUNTOS A LOS QUE PAGARON
+            if (!userData.pagoConfirmado) {
+                batch.update(db.collection('usuarios').doc(userId), { puntos: 0 });
+                return; // Saltar a la siguiente iteración
+            }
+
+            const predicciones = prediccionesPorUser[userId] || [];
+            let totalPuntos = 0;
+
+            predicciones.forEach(pred => {
+                const resReal = resultadosMap[pred.partidoId];
+                const infoPartido = partidosDataMap[pred.partidoId];
+
+                if (resReal && resReal.resultado && infoPartido) {
+                    if (pred.resultado === resReal.resultado) {
+                        const esDoble = infoPartido.local === "Independiente (América)" || infoPartido.visitante === "Independiente (América)";
+                        totalPuntos += esDoble ? 6 : 3; // +6 si es de Independiente, si no +3
+                    }
+                }
+            });
+
+            // Sumar punto por predicción de gol (si la config está resuelta)
+            if (jugadorGolHizo !== null && userData.prediccionGol !== undefined && userData.prediccionGol !== null) {
+                if (userData.prediccionGol === jugadorGolHizo) {
+                    totalPuntos += 1;
+                }
+            }
+
+            // Preparar update en batch
+            batch.update(db.collection('usuarios').doc(userId), {
+                puntos: totalPuntos
+            });
+        });
+
+        await batch.commit();
+        alert("¡Puntos calculados y ranking actualizado correctamente!");
+        cargarUsuariosAdmin(); // refrescar tabla
+
+    } catch (error) {
+        console.error("Error:", error);
+        alert("Error al calcular puntos.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Calcular Puntos de Todos";
+    }
+}
+
+async function cargarConfigGolAdmin() {
+    try {
+        const doc = await db.collection('config').doc(configDocId('general')).get();
+        if (doc.exists) {
+            const data = doc.data();
+            if (data.jugadorGol) document.getElementById('config-jugador').value = data.jugadorGol;
+            if (data.hizoGol) document.getElementById('config-hizo-gol').value = data.hizoGol;
+            if (data.cerrado) document.getElementById('config-cerrado').checked = true;
+        }
+    } catch(e) {}
+}
+
+async function guardarConfigGol(e) {
+    e.preventDefault();
+    const jugador = document.getElementById('config-jugador').value.trim();
+    const hizoGol = document.getElementById('config-hizo-gol').value;
+    const cerrado = document.getElementById('config-cerrado').checked;
+
+    try {
+        await db.collection('config').doc(configDocId('general')).set({
+            jugadorGol: jugador,
+            hizoGol: hizoGol,
+            cerrado: cerrado
+        }, { merge: true });
+        alert('Configuración guardada.');
+    } catch(err) {
+        console.error(err);
+        alert('Error al guardar configuración.');
+    }
+}
+
+window.resetearFecha = async function() {
+    if (!confirm("⚠️ ¿Estás seguro que querés resetear la fecha? Esto eliminará TODOS los participantes, puntos y sus predicciones. Esta acción NO se puede deshacer.")) return;
+
+    try {
+        const prediccionesSnap = await queryTorneo('predicciones').get();
+        const usuariosSnap = await queryTorneo('usuarios').get();
+        
+        const allDocs = [...prediccionesSnap.docs, ...usuariosSnap.docs];
+        
+        if (allDocs.length === 0) {
+            alert("No hay datos para resetear.");
+            return;
+        }
+
+        // --- ACTUALIZAR ESTADO (Avanzar fecha y Abrir nueva) ---
+        let numeroFecha = 1;
+        try {
+            const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
+            if (estadoDoc.exists && estadoDoc.data().numeroFecha) {
+                numeroFecha = estadoDoc.data().numeroFecha;
+            }
+        } catch(e) { console.error(e); }
+
+        await db.collection('config').doc(configDocId('estado')).set({ 
+            numeroFecha: numeroFecha + 1,
+            fechaCerrada: false
+        }, { merge: true });
+
+        // Actualizar botón frontend si existe
+        const btnCerrar = document.getElementById('btn-cerrar-fecha');
+        if (btnCerrar) btnCerrar.textContent = "Cerrar Fecha Global";
+
+        // --- BORRAR DATOS (RESET) ---
+        const batches = [];
+        let currentBatch = db.batch();
+        let opsCounter = 0;
+
+        allDocs.forEach(doc => {
+            currentBatch.delete(doc.ref);
+            opsCounter++;
+
+            // El límite de Firestore es de 500 operaciones por batch
+            if (opsCounter === 490) {
+                batches.push(currentBatch.commit());
+                currentBatch = db.batch(); // Iniciar nuevo batch
+                opsCounter = 0;
+            }
+        });
+
+        // Commit del remanente final
+        if (opsCounter > 0) {
+            batches.push(currentBatch.commit());
+        }
+
+        // Esperar a que se procesen todos los batches
+        await Promise.all(batches);
+
+        alert("Fecha reseteada con éxito. Todos los participantes han sido eliminados.");
+        cargarUsuariosAdmin(); // Recargar tabla
+    } catch (err) {
+        console.error("Error al resetear fecha:", err);
+        alert("Ocurrió un error al intentar resetear la fecha.");
+    }
+}
+
+window.toggleCierreGlobal = async function() {
+    const btn = document.getElementById('btn-cerrar-fecha');
+    if (btn) btn.disabled = true; // Prevención de doble ejecución
+
+    try {
+        const doc = await db.collection('config').doc(configDocId('estado')).get();
+        const estaCerrada = doc.exists && doc.data().fechaCerrada;
+        const numeroFecha = doc.exists && doc.data().numeroFecha ? doc.data().numeroFecha : 1;
+        
+        const nuevoEstado = !estaCerrada;
+        if (!confirm(`¿Seguro que querés ${nuevoEstado ? 'CERRAR' : 'ABRIR'} la fecha para todos?`)) {
+            return; // Esto pasará directamente al finally para rehabilitar el botón
+        }
+
+        // Cambio de UX visual mientras procesa
+        if (btn) btn.textContent = nuevoEstado ? "Cerrando..." : "Abriendo...";
+
+        // Si estamos cerrando la fecha, guardamos o actualizamos el historial
+        if (nuevoEstado === true) {
+            const usuariosSnap = await queryTorneo('usuarios').get();
+            let usuariosArray = [];
+            
+            usuariosSnap.forEach(uDoc => {
+                const data = uDoc.data();
+                usuariosArray.push({
+                    nombre: data.nombre,
+                    puntos: data.puntos || 0
+                });
+            });
+
+            if (usuariosArray.length > 0) {
+                usuariosArray.sort((a, b) => b.puntos - a.puntos);
+
+                const historialData = {
+                    fecha: `Fecha ${numeroFecha}`,
+                    numeroFecha: numeroFecha,
+                    fechaCierre: firebase.firestore.FieldValue.serverTimestamp(),
+                    ranking: usuariosArray,
+                    ganador: usuariosArray[0],
+                    torneo: torneoActual
+                };
+
+                await db.collection('historial_fechas').doc(`fecha_${torneoActual}_${numeroFecha}`).set(historialData, { merge: true });
+            }
+        }
+
+        await db.collection('config').doc(configDocId('estado')).set({ fechaCerrada: nuevoEstado }, { merge: true });
+        alert(`La fecha ha sido ${nuevoEstado ? 'CERRADA y el ranking actualizado' : 'ABIERTA'} globalmente.`);
+        
+        if (btn) btn.textContent = nuevoEstado ? "Abrir Fecha Global" : "Cerrar Fecha Global";
+    } catch (err) {
+        console.error(err);
+        alert("Error al cambiar estado global.");
+        // Restablecemos el texto de acuerdo al estado real si hubo falla
+        const doc = await db.collection('config').doc(configDocId('estado')).get();
+        if (btn) btn.textContent = (doc.exists && doc.data().fechaCerrada) ? "Abrir Fecha Global" : "Cerrar Fecha Global";
+    } finally {
+        // Se ejecuta SIEMPRE para rehabilitar interacción
+        if (btn) btn.disabled = false;
+    }
+}
