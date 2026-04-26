@@ -5,7 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Prode del Pueblo</title>
-    <link rel="stylesheet" href="styles.css">
+    <!-- Anti-cache -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="styles.css?v=4">
     <script>
         // Bloqueo simple por contraseña ANTES de renderizar la página
         const pass = prompt("🔒 Ingrese la contraseña de administrador:");
@@ -153,9 +157,9 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
-    <script src="firebase.js"></script>
-    <script src="equipos.js"></script>
-    <script src="app.js"></script>
+    <script src="firebase.js?v=4"></script>
+    <script src="equipos.js?v=4"></script>
+    <script src="app.js?v=4"></script>
 </body>
 
 </html>

@@ -1,8 +1,18 @@
-// Registrar Service Worker para PWA
+// Service Worker — desregistrar versiones viejas y limpiar caches
 if ('serviceWorker' in navigator) {
+    // Registrar el SW de limpieza (se auto-desactiva y borra caches)
     navigator.serviceWorker.register('./service-worker.js')
-    .then(() => console.log('Service Worker Registrado'))
-    .catch(err => console.error('Error registrando SW:', err));
+        .then(() => console.log('[SW] Cache limpiado correctamente'))
+        .catch(err => console.warn('[SW] Error:', err));
+
+    // Por las dudas: desregistrar cualquier SW previo que pueda servir archivos viejos
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+        registrations.forEach(reg => {
+            if (!reg.active || !reg.active.scriptURL.includes('service-worker.js')) {
+                reg.unregister();
+            }
+        });
+    });
 }
 
 // Variables globales para almacenar datos cargados y evitar re-fetches innecesarios
