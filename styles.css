@@ -1509,3 +1509,32 @@ td a:hover { text-decoration: underline; }
     .info-bono-inner { padding: 1.5rem 1.25rem; }
     .info-bono-text { font-size: 0.88rem; }
 }
+
+/* ─────────────────────────────────────────
+   FOOTER — Desarrollado por @masalvador23
+───────────────────────────────────────── */
+.footer-dev {
+    text-align: center;
+    padding: 1.25rem 1rem 2rem;
+    font-size: 0.78rem;
+    font-family: var(--font-body);
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+}
+
+.footer-dev a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease, opacity 0.2s ease;
+    opacity: 0.85;
+}
+
+.footer-dev a:hover {
+    opacity: 1;
+    color: var(--primary-light);
+}
+
+@media (max-width: 480px) {
+    .footer-dev { font-size: 0.72rem; padding-bottom: 1.5rem; }
+}

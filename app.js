@@ -39,18 +39,6 @@ function configDocId(nombre) {
 }
 
 // Funciones para escudos automáticos
-function normalizarNombre(nombre) {
-    if (!nombre) return 'default';
-    return nombre
-      .replace(/\s*\(.*?\)/g, "")      // Elimina los paréntesis y su contenido
-      .toLowerCase()                   // Pasa todo a minúsculas
-      .replace(/\./g, "")              // Elimina puntos (ej: F.B.C -> fbc)
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // Elimina tildes y acentos
-      .replace(/[^a-z0-9]+/g, "-")     // Reemplaza espacios y símbolos por guiones
-      .replace(/^-+|-+$/g, "");        // Limpia guiones en los extremos
-}
-
 // Manejador global de errores para imágenes caídas (No inline)
 document.addEventListener('error', function (e) {
     const target = e.target;
@@ -365,6 +353,17 @@ async function enviarPredicciones() {
     if (!nombre || !whatsapp) {
         alert("Por favor completá tu nombre y WhatsApp.");
         return;
+    }
+
+    // 🛑 VALIDACIÓN: verificar si la fecha global está cerrada (segunda línea de defensa)
+    try {
+        const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
+        if (estadoDoc.exists && estadoDoc.data().fechaCerrada) {
+            alert("La fecha ya fue cerrada. No se aceptan más predicciones.");
+            return;
+        }
+    } catch(err) {
+        console.error("Error al verificar estado global:", err);
     }
 
     // 🛑 VALIDACIÓN DE USUARIO EXISTENTE POR WHATSAPP
@@ -694,10 +693,14 @@ async function initAdminApp() {
     const btnCerrarFecha = document.getElementById('btn-cerrar-fecha');
     if (btnCerrarFecha) {
         btnCerrarFecha.addEventListener('click', toggleCierreGlobal);
-        // Cargar estado inicial del botón
+        // Cargar estado inicial del botón y banner de desactualización
         db.collection('config').doc(configDocId('estado')).get().then(doc => {
             if (doc.exists && doc.data().fechaCerrada) {
                 btnCerrarFecha.textContent = "Abrir Fecha Global";
+            }
+            const banner = document.getElementById('ranking-desactualizado-banner');
+            if (banner && doc.exists && doc.data().resultadosDesactualizados) {
+                banner.style.display = 'block';
             }
         }).catch(err => console.error(err));
     }
@@ -902,6 +905,17 @@ window.guardarResultado = async function(partidoId) {
         return;
     }
 
+    // Si ya se calcularon puntos, advertir que el ranking quedará desactualizado
+    try {
+        const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
+        if (estadoDoc.exists && estadoDoc.data().fechaCalculada === true) {
+            const continuar = confirm("⚠️ Ya se calcularon los puntos para esta fecha.\n\nSi modificás este resultado, el ranking quedará DESACTUALIZADO hasta que vuelvas a calcular puntos.\n\n¿Querés guardar de todas formas?");
+            if (!continuar) return;
+            // Marcar que los resultados fueron modificados post-cálculo
+            await db.collection('config').doc(configDocId('estado')).set({ resultadosDesactualizados: true }, { merge: true });
+        }
+    } catch(e) { console.error(e); }
+
     try {
         // Buscar si ya existe resultado para actualizarlo
         const snapshot = await db.collection('resultados').where('partidoId', '==', partidoId).where('torneo', '==', torneoActual).get();
@@ -921,6 +935,75 @@ window.guardarResultado = async function(partidoId) {
     } catch (error) {
         console.error("Error:", error);
         alert("Error al guardar");
+    }
+}
+
+// Guardar todos los resultados en una sola acción batch
+window.guardarTodosLosResultados = async function() {
+    const btn = document.getElementById('btn-guardar-todos');
+    if (btn && btn._guardando) return;
+    if (btn) { btn._guardando = true; btn.disabled = true; btn.textContent = "Guardando..."; }
+
+    try {
+        if (partidosGlobalAdmin.length === 0) {
+            alert("No hay partidos cargados.");
+            return;
+        }
+
+        const updates = [];
+        const sinResultado = [];
+
+        for (const p of partidosGlobalAdmin) {
+            const select = document.getElementById(`res-${p.id}`);
+            if (!select || !select.value) {
+                sinResultado.push(`${p.local} vs ${p.visitante}`);
+                continue;
+            }
+            updates.push({ partidoId: p.id, resultado: select.value });
+        }
+
+        if (sinResultado.length > 0) {
+            const continuar = confirm(`⚠️ Los siguientes partidos no tienen resultado seleccionado:\n\n${sinResultado.join('\n')}\n\n¿Guardar solo los que tienen resultado cargado?`);
+            if (!continuar) return;
+        }
+
+        if (updates.length === 0) {
+            alert("No hay resultados para guardar.");
+            return;
+        }
+
+        // Advertir si los puntos ya fueron calculados (ranking quedará desactualizado)
+        try {
+            const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
+            if (estadoDoc.exists && estadoDoc.data().fechaCalculada === true) {
+                const continuar = confirm("⚠️ Ya se calcularon los puntos para esta fecha.\n\nSi guardás nuevos resultados, el ranking quedará DESACTUALIZADO hasta que vuelvas a calcular puntos.\n\n¿Querés continuar?");
+                if (!continuar) return;
+                await db.collection('config').doc(configDocId('estado')).set({ resultadosDesactualizados: true }, { merge: true });
+            }
+        } catch(e) { console.error(e); }
+
+        // Obtener resultados existentes para saber qué actualizar vs crear
+        const resSnapshot = await queryTorneo('resultados').get();
+        const existentesMap = {};
+        resSnapshot.forEach(doc => { existentesMap[doc.data().partidoId] = doc.id; });
+
+        const batch = db.batch();
+        updates.forEach(({ partidoId, resultado }) => {
+            if (existentesMap[partidoId]) {
+                batch.update(db.collection('resultados').doc(existentesMap[partidoId]), { resultado });
+            } else {
+                batch.set(db.collection('resultados').doc(), { partidoId, resultado, torneo: torneoActual });
+            }
+        });
+
+        await batch.commit();
+        alert(`✅ ${updates.length} resultado(s) guardados correctamente.`);
+        cargarPartidosAdmin();
+    } catch (err) {
+        console.error("Error al guardar todos los resultados:", err);
+        alert("Error al guardar los resultados. Intentá de nuevo.");
+    } finally {
+        if (btn) { btn._guardando = false; btn.disabled = false; btn.textContent = "💾 Guardar Todos los Resultados"; }
     }
 }
 
@@ -978,101 +1061,128 @@ window.togglePago = async function(userId, isChecked) {
     }
 }
 
+// Función interna de cálculo de puntos (usada por btn y por cierre de fecha)
+async function _calcularPuntosInterno() {
+    // 1. Obtener resultados reales
+    const resSnapshot = await queryTorneo('resultados').get();
+    const resultadosMap = {};
+    resSnapshot.forEach(doc => {
+        const data = doc.data();
+        resultadosMap[data.partidoId] = data;
+    });
+
+    if (Object.keys(resultadosMap).length === 0) {
+        throw new Error("No hay resultados reales cargados. Cargá los resultados antes de calcular puntos.");
+    }
+
+    // 2. Obtener usuarios
+    const usersSnapshot = await queryTorneo('usuarios').get();
+    
+    // 3. Obtener todas las predicciones
+    const predSnapshot = await queryTorneo('predicciones').get();
+    const prediccionesPorUser = {};
+    predSnapshot.forEach(doc => {
+        const p = doc.data();
+        if (!prediccionesPorUser[p.userId]) {
+            prediccionesPorUser[p.userId] = [];
+        }
+        prediccionesPorUser[p.userId].push(p);
+    });
+
+    // 3.2 Obtener info de los partidos para puntos dobles
+    const partSnapshot = await queryTorneo('partidos').get();
+    const partidosDataMap = {};
+    partSnapshot.forEach(doc => {
+        partidosDataMap[doc.id] = doc.data();
+    });
+
+    // 3.5 Obtener config de gol
+    let jugadorGolHizo = null;
+    const configDoc = await db.collection('config').doc(configDocId('general')).get();
+    if (configDoc.exists) {
+        const val = configDoc.data().hizoGol;
+        if (val === 'si') jugadorGolHizo = true;
+        if (val === 'no') jugadorGolHizo = false;
+    }
+
+    // 4. RESETEAR todos los puntos a 0 primero (cálculo determinístico, sin acumulación)
+    //    Luego calcular desde cero para cada usuario.
+    const batch = db.batch();
+
+    usersSnapshot.forEach(userDoc => {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        
+        // Usuarios sin pago: siempre quedan en 0
+        if (!userData.pagoConfirmado) {
+            batch.update(db.collection('usuarios').doc(userId), { puntos: 0 });
+            return;
+        }
+
+        // Partir SIEMPRE desde 0 — nunca sumar sobre valor previo
+        const predicciones = prediccionesPorUser[userId] || [];
+        let totalPuntos = 0;
+
+        predicciones.forEach(pred => {
+            const resReal = resultadosMap[pred.partidoId];
+            const infoPartido = partidosDataMap[pred.partidoId];
+
+            if (resReal && resReal.resultado && infoPartido) {
+                if (pred.resultado === resReal.resultado) {
+                    const esDoble = infoPartido.local === "Independiente (América)" || infoPartido.visitante === "Independiente (América)";
+                    totalPuntos += esDoble ? 6 : 3;
+                }
+            }
+        });
+
+        // Sumar punto por predicción de gol
+        if (jugadorGolHizo !== null && userData.prediccionGol !== undefined && userData.prediccionGol !== null) {
+            if (userData.prediccionGol === jugadorGolHizo) {
+                totalPuntos += 1;
+            }
+        }
+
+        batch.update(db.collection('usuarios').doc(userId), { puntos: totalPuntos });
+    });
+
+    await batch.commit();
+
+    // Marcar fecha como calculada y limpiar flag de desactualización
+    await db.collection('config').doc(configDocId('estado')).set({
+        fechaCalculada: true,
+        resultadosDesactualizados: false
+    }, { merge: true });
+
+    // Ocultar banner de desactualización si está visible
+    const banner = document.getElementById('ranking-desactualizado-banner');
+    if (banner) banner.style.display = 'none';
+}
+
 async function calcularPuntos() {
     const btn = document.getElementById('btn-calcular-puntos');
+    if (btn._calculando) return; // Evitar doble click / race condition
+    btn._calculando = true;
     btn.disabled = true;
     btn.textContent = "Calculando...";
 
     try {
-        // 1. Obtener resultados reales
-        const resSnapshot = await queryTorneo('resultados').get();
-        const resultadosMap = {};
-        resSnapshot.forEach(doc => {
-            const data = doc.data();
-            resultadosMap[data.partidoId] = data;
-        });
-
-        // 2. Obtener usuarios
-        const usersSnapshot = await queryTorneo('usuarios').get();
-        
-        // 3. Obtener todas las predicciones
-        const predSnapshot = await queryTorneo('predicciones').get();
-        const prediccionesPorUser = {};
-        predSnapshot.forEach(doc => {
-            const p = doc.data();
-            if (!prediccionesPorUser[p.userId]) {
-                prediccionesPorUser[p.userId] = [];
-            }
-            prediccionesPorUser[p.userId].push(p);
-        });
-
-        // 3.2 Obtener info de los partidos para la regla de puntos dobles
-        const partSnapshot = await queryTorneo('partidos').get();
-        const partidosDataMap = {};
-        partSnapshot.forEach(doc => {
-            partidosDataMap[doc.id] = doc.data();
-        });
-
-        // 3.5 Obtener config de gol para calcular
-        let jugadorGolHizo = null;
-        const configDoc = await db.collection('config').doc(configDocId('general')).get();
-        if (configDoc.exists) {
-            const val = configDoc.data().hizoGol;
-            if (val === 'si') jugadorGolHizo = true;
-            if (val === 'no') jugadorGolHizo = false;
+        // Verificar si ya fue calculado y confirmar recálculo
+        const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
+        if (estadoDoc.exists && estadoDoc.data().fechaCalculada === true) {
+            const recalcular = confirm("⚠️ Los puntos ya fueron calculados para esta fecha.\n\n¿Querés RECALCULAR de todas formas?\n\nLos puntos de todos los usuarios se resetearán a 0 y se recalcularán desde cero.");
+            if (!recalcular) return;
         }
 
-        // 4. Calcular puntos
-        const batch = db.batch();
-
-        usersSnapshot.forEach(userDoc => {
-            const userId = userDoc.id;
-            const userData = userDoc.data();
-            
-            // 💰 SOLO SUMAR PUNTOS A LOS QUE PAGARON
-            if (!userData.pagoConfirmado) {
-                batch.update(db.collection('usuarios').doc(userId), { puntos: 0 });
-                return; // Saltar a la siguiente iteración
-            }
-
-            const predicciones = prediccionesPorUser[userId] || [];
-            let totalPuntos = 0;
-
-            predicciones.forEach(pred => {
-                const resReal = resultadosMap[pred.partidoId];
-                const infoPartido = partidosDataMap[pred.partidoId];
-
-                if (resReal && resReal.resultado && infoPartido) {
-                    if (pred.resultado === resReal.resultado) {
-                        const esDoble = infoPartido.local === "Independiente (América)" || infoPartido.visitante === "Independiente (América)";
-                        totalPuntos += esDoble ? 6 : 3; // +6 si es de Independiente, si no +3
-                    }
-                }
-            });
-
-            // Sumar punto por predicción de gol (si la config está resuelta)
-            if (jugadorGolHizo !== null && userData.prediccionGol !== undefined && userData.prediccionGol !== null) {
-                if (userData.prediccionGol === jugadorGolHizo) {
-                    totalPuntos += 1;
-                }
-            }
-
-            // Preparar update en batch
-            batch.update(db.collection('usuarios').doc(userId), {
-                puntos: totalPuntos
-            });
-        });
-
-        await batch.commit();
+        await _calcularPuntosInterno();
         alert("¡Puntos calculados y ranking actualizado correctamente!");
-        cargarUsuariosAdmin(); // refrescar tabla
-
+        cargarUsuariosAdmin();
     } catch (error) {
         console.error("Error:", error);
-        alert("Error al calcular puntos.");
+        alert(error.message || "Error al calcular puntos.");
     } finally {
         btn.disabled = false;
         btn.textContent = "Calcular Puntos de Todos";
+        btn._calculando = false;
     }
 }
 
@@ -1174,7 +1284,7 @@ window.resetearFecha = async function() {
 
 window.toggleCierreGlobal = async function() {
     const btn = document.getElementById('btn-cerrar-fecha');
-    if (btn) btn.disabled = true; // Prevención de doble ejecución
+    if (btn) btn.disabled = true;
 
     try {
         const doc = await db.collection('config').doc(configDocId('estado')).get();
@@ -1182,29 +1292,41 @@ window.toggleCierreGlobal = async function() {
         const numeroFecha = doc.exists && doc.data().numeroFecha ? doc.data().numeroFecha : 1;
         
         const nuevoEstado = !estaCerrada;
-        if (!confirm(`¿Seguro que querés ${nuevoEstado ? 'CERRAR' : 'ABRIR'} la fecha para todos?`)) {
-            return; // Esto pasará directamente al finally para rehabilitar el botón
+
+        // Si vamos a CERRAR, calcular puntos automáticamente solo si aún no se calcularon
+        if (nuevoEstado === true) {
+            if (!confirm(`¿Seguro que querés CERRAR la fecha?\n\n⚡ Se verificarán y calcularán los puntos antes de cerrar.`)) {
+                return;
+            }
+            if (btn) btn.textContent = "Verificando puntos...";
+
+            const estadoActual = await db.collection('config').doc(configDocId('estado')).get();
+            const yaCalculado = estadoActual.exists && estadoActual.data().fechaCalculada === true;
+
+            if (!yaCalculado) {
+                if (btn) btn.textContent = "Calculando puntos...";
+                await _calcularPuntosInterno();
+            }
+            // Si ya estaban calculados, no recalcular — el ranking ya es correcto
+        } else {
+            if (!confirm(`¿Seguro que querés ABRIR la fecha para todos?`)) {
+                return;
+            }
         }
 
-        // Cambio de UX visual mientras procesa
         if (btn) btn.textContent = nuevoEstado ? "Cerrando..." : "Abriendo...";
 
-        // Si estamos cerrando la fecha, guardamos o actualizamos el historial
+        // Guardar historial al cerrar
         if (nuevoEstado === true) {
             const usuariosSnap = await queryTorneo('usuarios').get();
             let usuariosArray = [];
-            
             usuariosSnap.forEach(uDoc => {
                 const data = uDoc.data();
-                usuariosArray.push({
-                    nombre: data.nombre,
-                    puntos: data.puntos || 0
-                });
+                usuariosArray.push({ nombre: data.nombre, puntos: data.puntos || 0 });
             });
 
             if (usuariosArray.length > 0) {
                 usuariosArray.sort((a, b) => b.puntos - a.puntos);
-
                 const historialData = {
                     fecha: `Fecha ${numeroFecha}`,
                     numeroFecha: numeroFecha,
@@ -1213,23 +1335,26 @@ window.toggleCierreGlobal = async function() {
                     ganador: usuariosArray[0],
                     torneo: torneoActual
                 };
-
                 await db.collection('historial_fechas').doc(`fecha_${torneoActual}_${numeroFecha}`).set(historialData, { merge: true });
             }
         }
 
         await db.collection('config').doc(configDocId('estado')).set({ fechaCerrada: nuevoEstado }, { merge: true });
-        alert(`La fecha ha sido ${nuevoEstado ? 'CERRADA y el ranking actualizado' : 'ABIERTA'} globalmente.`);
+        alert(`La fecha ha sido ${nuevoEstado ? 'CERRADA (puntos calculados y ranking actualizado)' : 'ABIERTA'} globalmente.`);
         
         if (btn) btn.textContent = nuevoEstado ? "Abrir Fecha Global" : "Cerrar Fecha Global";
+
+        // Recargar la UI del admin para reflejar estado
+        cargarPartidosAdmin();
+        cargarUsuariosAdmin();
     } catch (err) {
         console.error(err);
         alert("Error al cambiar estado global.");
-        // Restablecemos el texto de acuerdo al estado real si hubo falla
-        const doc = await db.collection('config').doc(configDocId('estado')).get();
-        if (btn) btn.textContent = (doc.exists && doc.data().fechaCerrada) ? "Abrir Fecha Global" : "Cerrar Fecha Global";
+        try {
+            const doc2 = await db.collection('config').doc(configDocId('estado')).get();
+            if (btn) btn.textContent = (doc2.exists && doc2.data().fechaCerrada) ? "Abrir Fecha Global" : "Cerrar Fecha Global";
+        } catch(_) {}
     } finally {
-        // Se ejecuta SIEMPRE para rehabilitar interacción
         if (btn) btn.disabled = false;
     }
 }
