@@ -223,10 +223,17 @@ async function cargarPartidosUsuario() {
 
         // Verificar estado global de cierre de fecha
         let fechaCerradaGlobal = false;
+        let ignorarCierreHorario = false;
         try {
             const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
             if (estadoDoc.exists && estadoDoc.data().fechaCerrada) {
                 fechaCerradaGlobal = true;
+            }
+            if (estadoDoc.exists && estadoDoc.data().ignorarCierreHorario) {
+                ignorarCierreHorario = true;
+                window._ignorarCierreHorario = true;
+            } else {
+                window._ignorarCierreHorario = false;
             }
         } catch (e) { console.error("Error al leer estado global:", e); }
 
@@ -254,7 +261,8 @@ async function cargarPartidosUsuario() {
             const imgVisitante = getEscudo(partido.visitante);
             
             // Auto-cerrar de forma robusta por timestamp
-            let cerrado = fechaCerradaGlobal || partido.cerrado || (fechaPartido < ahora);
+            // Si ignorarCierreHorario está activo (admin lo habilita), no se cierra por hora
+            let cerrado = fechaCerradaGlobal || partido.cerrado || (fechaPartido < ahora && !ignorarCierreHorario);
             if (cerrado) algunCerrado = true;
             const disabledAttr = cerrado ? 'disabled' : '';
             
@@ -389,7 +397,7 @@ async function enviarPredicciones() {
         // Validación Anti-Trampa backend-side (JS logical block)
         const ahora = Date.now();
         const fechaPartido = new Date(pInfo.fecha).getTime();
-        const isClosed = pInfo.cerrado || (fechaPartido < ahora);
+        const isClosed = pInfo.cerrado || (fechaPartido < ahora && !window._ignorarCierreHorario);
         
         if (isClosed) return; // Se descarta cualquier input inyectado si ya está cerrado
 
@@ -707,6 +715,15 @@ async function initAdminApp() {
     
     const configForm = document.getElementById('config-gol-form');
     if (configForm) configForm.addEventListener('submit', guardarConfigGol);
+
+    const btnOverride = document.getElementById('btn-override-horario');
+    if (btnOverride) {
+        db.collection('config').doc(configDocId('estado')).get().then(doc => {
+            const activo = doc.exists && doc.data().ignorarCierreHorario;
+            actualizarBtnOverride(activo);
+        }).catch(() => {});
+        btnOverride.addEventListener('click', toggleOverrideHorario);
+    }
 
     await cargarPartidosAdmin();
     await cargarUsuariosAdmin();
@@ -1279,6 +1296,48 @@ window.resetearFecha = async function() {
     } catch (err) {
         console.error("Error al resetear fecha:", err);
         alert("Ocurrió un error al intentar resetear la fecha.");
+    }
+}
+
+function actualizarBtnOverride(activo) {
+    const btn = document.getElementById('btn-override-horario');
+    if (!btn) return;
+    if (activo) {
+        btn.textContent = '🟢 Ventana de Carga ACTIVA — Desactivar';
+        btn.style.background = 'linear-gradient(135deg, #16a34a, #15803d)';
+    } else {
+        btn.textContent = '🕐 Activar Ventana de Carga Manual';
+        btn.style.background = 'linear-gradient(135deg, #7c3aed, #4f46e5)';
+    }
+}
+
+window.toggleOverrideHorario = async function() {
+    const btn = document.getElementById('btn-override-horario');
+    if (btn) btn.disabled = true;
+    try {
+        const doc = await db.collection('config').doc(configDocId('estado')).get();
+        const estaActivo = doc.exists && doc.data().ignorarCierreHorario;
+        const nuevoEstado = !estaActivo;
+
+        const msg = nuevoEstado
+            ? '¿Activar la ventana de carga manual?\n\nLos partidos ya jugados quedarán desbloqueados para que la gente del físico pueda cargar sus predicciones.\n\n⚠️ Acordate de DESACTIVAR esto cuando terminen.'
+            : '¿Cerrar la ventana de carga manual?\n\nLos partidos volverán a cerrarse automáticamente por horario.';
+
+        if (!confirm(msg)) return;
+
+        await db.collection('config').doc(configDocId('estado')).set(
+            { ignorarCierreHorario: nuevoEstado }, { merge: true }
+        );
+        actualizarBtnOverride(nuevoEstado);
+        alert(nuevoEstado
+            ? '✅ Ventana activada. Los partidos están desbloqueados. Avisale a la gente del físico que cargue ahora.'
+            : '🔒 Ventana cerrada. Los partidos volvieron a su estado normal.'
+        );
+    } catch (err) {
+        console.error(err);
+        alert('Error al cambiar el estado de la ventana de carga.');
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
