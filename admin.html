@@ -133,9 +133,21 @@
             <p id="override-horario-desc" style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px; text-align:center;">
                 Permite cargar predicciones aunque los partidos ya hayan comenzado. Desactivalo cuando terminen.
             </p>
-            <button id="btn-resetear-fecha" class="btn-primary w-100" style="background: linear-gradient(135deg, var(--accent), #d97706);">
-                🔄 Resetear Fecha
+            <button id="btn-avanzar-fecha" class="btn-primary w-100" style="background: linear-gradient(135deg, #16a34a, #15803d); margin-bottom: 10px;">
+                ➡️ Avanzar a Nueva Fecha
             </button>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px; text-align:center;">
+                Borra partidos y predicciones de esta fecha. Los usuarios y sus puntos acumulados se conservan.
+            </p>
+            <hr style="margin: 15px 0; border-color: var(--card-border);">
+            <details>
+                <summary style="cursor:pointer; color:var(--danger); font-size:0.85rem; font-weight:600;">⚠️ Zona peligrosa</summary>
+                <div style="margin-top:10px;">
+                    <button id="btn-resetear-fecha" class="btn-primary w-100" style="background: linear-gradient(135deg, var(--accent), #d97706);">
+                        🔄 Resetear TODO (borra usuarios y puntos)
+                    </button>
+                </div>
+            </details>
         </section>
 
         <!-- PARTICIPANTES Y PAGOS -->
@@ -162,6 +174,20 @@
                     </tbody>
                 </table>
             </div>
+        </section>
+
+        <!-- BUSCAR Y LIMPIAR PREDICCIONES DUPLICADAS -->
+        <section class="card mt-2">
+            <h2>🔍 Buscar Predicciones por Usuario</h2>
+            <p class="subtitle" style="margin-bottom: 1rem;">
+                Buscá a un participante por nombre para ver todas sus predicciones y eliminar duplicados.
+            </p>
+            <div style="display:flex; gap:8px; margin-bottom:1rem;">
+                <input type="text" id="buscar-usuario-input" placeholder="Ej: Lorena" 
+                    style="flex:1; padding:0.8rem; border-radius:8px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white; -webkit-text-fill-color:white; caret-color:white;">
+                <button onclick="buscarPrediccionesUsuario()" class="btn-primary" style="white-space:nowrap;">Buscar</button>
+            </div>
+            <div id="buscar-usuario-resultados"></div>
         </section>
 
     </main>

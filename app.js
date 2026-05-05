@@ -223,17 +223,10 @@ async function cargarPartidosUsuario() {
 
         // Verificar estado global de cierre de fecha
         let fechaCerradaGlobal = false;
-        let ignorarCierreHorario = false;
         try {
             const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
             if (estadoDoc.exists && estadoDoc.data().fechaCerrada) {
                 fechaCerradaGlobal = true;
-            }
-            if (estadoDoc.exists && estadoDoc.data().ignorarCierreHorario) {
-                ignorarCierreHorario = true;
-                window._ignorarCierreHorario = true;
-            } else {
-                window._ignorarCierreHorario = false;
             }
         } catch (e) { console.error("Error al leer estado global:", e); }
 
@@ -261,8 +254,7 @@ async function cargarPartidosUsuario() {
             const imgVisitante = getEscudo(partido.visitante);
             
             // Auto-cerrar de forma robusta por timestamp
-            // Si ignorarCierreHorario está activo (admin lo habilita), no se cierra por hora
-            let cerrado = fechaCerradaGlobal || partido.cerrado || (fechaPartido < ahora && !ignorarCierreHorario);
+            let cerrado = fechaCerradaGlobal || partido.cerrado || (fechaPartido < ahora);
             if (cerrado) algunCerrado = true;
             const disabledAttr = cerrado ? 'disabled' : '';
             
@@ -397,7 +389,7 @@ async function enviarPredicciones() {
         // Validación Anti-Trampa backend-side (JS logical block)
         const ahora = Date.now();
         const fechaPartido = new Date(pInfo.fecha).getTime();
-        const isClosed = pInfo.cerrado || (fechaPartido < ahora && !window._ignorarCierreHorario);
+        const isClosed = pInfo.cerrado || (fechaPartido < ahora);
         
         if (isClosed) return; // Se descarta cualquier input inyectado si ya está cerrado
 
@@ -697,6 +689,9 @@ async function initAdminApp() {
     
     const btnReset = document.getElementById('btn-resetear-fecha');
     if (btnReset) btnReset.addEventListener('click', resetearFecha);
+
+    const btnAvanzar = document.getElementById('btn-avanzar-fecha');
+    if (btnAvanzar) btnAvanzar.addEventListener('click', avanzarFecha);
     
     const btnCerrarFecha = document.getElementById('btn-cerrar-fecha');
     if (btnCerrarFecha) {
@@ -715,15 +710,6 @@ async function initAdminApp() {
     
     const configForm = document.getElementById('config-gol-form');
     if (configForm) configForm.addEventListener('submit', guardarConfigGol);
-
-    const btnOverride = document.getElementById('btn-override-horario');
-    if (btnOverride) {
-        db.collection('config').doc(configDocId('estado')).get().then(doc => {
-            const activo = doc.exists && doc.data().ignorarCierreHorario;
-            actualizarBtnOverride(activo);
-        }).catch(() => {});
-        btnOverride.addEventListener('click', toggleOverrideHorario);
-    }
 
     await cargarPartidosAdmin();
     await cargarUsuariosAdmin();
@@ -1234,6 +1220,106 @@ async function guardarConfigGol(e) {
     }
 }
 
+// ─── AVANZAR A NUEVA FECHA (conserva usuarios y puntos) ──────────────────────
+window.avanzarFecha = async function() {
+    if (!confirm(
+        '➡️ ¿Avanzar a la nueva fecha?\n\n' +
+        'Esto va a:\n' +
+        '✅ Conservar todos los usuarios y sus puntos acumulados\n' +
+        '✅ Conservar el estado de pagos\n' +
+        '🗑️ Borrar los partidos de esta fecha\n' +
+        '🗑️ Borrar las predicciones de esta fecha\n\n' +
+        '¿Confirmás?'
+    )) return;
+
+    const btn = document.getElementById('btn-avanzar-fecha');
+    if (btn) { btn.disabled = true; btn.textContent = 'Avanzando...'; }
+
+    try {
+        // Traer partidos y predicciones (NO usuarios)
+        const [partidosSnap, prediccionesSnap] = await Promise.all([
+            queryTorneo('partidos').get(),
+            queryTorneo('predicciones').get(),
+        ]);
+
+        const docsABorrar = [...partidosSnap.docs, ...prediccionesSnap.docs];
+
+        // Borrar en batches de 490
+        const batches = [];
+        let currentBatch = db.batch();
+        let opsCounter = 0;
+
+        docsABorrar.forEach(doc => {
+            currentBatch.delete(doc.ref);
+            opsCounter++;
+            if (opsCounter === 490) {
+                batches.push(currentBatch.commit());
+                currentBatch = db.batch();
+                opsCounter = 0;
+            }
+        });
+        if (opsCounter > 0) batches.push(currentBatch.commit());
+        await Promise.all(batches);
+
+        // Resetear prediccionGol de cada usuario pero NO sus puntos
+        const usuariosSnap = await queryTorneo('usuarios').get();
+        const userBatches = [];
+        let ub = db.batch();
+        let uOps = 0;
+        usuariosSnap.forEach(doc => {
+            ub.update(doc.ref, { prediccionGol: null, jugadorGol: '' });
+            uOps++;
+            if (uOps === 490) {
+                userBatches.push(ub.commit());
+                ub = db.batch();
+                uOps = 0;
+            }
+        });
+        if (uOps > 0) userBatches.push(ub.commit());
+        await Promise.all(userBatches);
+
+        // Avanzar número de fecha y abrir nueva
+        const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
+        const numeroFechaActual = (estadoDoc.exists && estadoDoc.data().numeroFecha) || 1;
+
+        await db.collection('config').doc(configDocId('estado')).set({
+            numeroFecha: numeroFechaActual + 1,
+            fechaCerrada: false,
+            ignorarCierreHorario: false,
+            resultadosDesactualizados: false,
+            puntosCalculados: false,
+        }, { merge: true });
+
+        // Resetear config gol de la fecha
+        await db.collection('config').doc(configDocId('gol')).set({
+            jugador: '',
+            hizoGol: 'pendiente',
+            cerrado: false,
+        }, { merge: true });
+
+        alert(
+            `✅ ¡Fecha ${numeroFechaActual} cerrada!\n\n` +
+            `Ahora estás en la Fecha ${numeroFechaActual + 1}.\n` +
+            `Los usuarios y sus puntos acumulados están intactos.\n\n` +
+            `Próximo paso: cargá los nuevos partidos.`
+        );
+
+        // Recargar admin
+        cargarPartidosAdmin();
+        cargarUsuariosAdmin();
+        cargarConfigGolAdmin();
+
+        const btnCerrar = document.getElementById('btn-cerrar-fecha');
+        if (btnCerrar) btnCerrar.textContent = 'Cerrar Fecha Global';
+
+    } catch (err) {
+        console.error('Error al avanzar fecha:', err);
+        alert('Ocurrió un error al avanzar la fecha. Revisá la consola.');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '➡️ Avanzar a Nueva Fecha'; }
+    }
+};
+
 window.resetearFecha = async function() {
     if (!confirm("⚠️ ¿Estás seguro que querés resetear la fecha? Esto eliminará TODOS los participantes, puntos y sus predicciones. Esta acción NO se puede deshacer.")) return;
 
@@ -1296,48 +1382,6 @@ window.resetearFecha = async function() {
     } catch (err) {
         console.error("Error al resetear fecha:", err);
         alert("Ocurrió un error al intentar resetear la fecha.");
-    }
-}
-
-function actualizarBtnOverride(activo) {
-    const btn = document.getElementById('btn-override-horario');
-    if (!btn) return;
-    if (activo) {
-        btn.textContent = '🟢 Ventana de Carga ACTIVA — Desactivar';
-        btn.style.background = 'linear-gradient(135deg, #16a34a, #15803d)';
-    } else {
-        btn.textContent = '🕐 Activar Ventana de Carga Manual';
-        btn.style.background = 'linear-gradient(135deg, #7c3aed, #4f46e5)';
-    }
-}
-
-window.toggleOverrideHorario = async function() {
-    const btn = document.getElementById('btn-override-horario');
-    if (btn) btn.disabled = true;
-    try {
-        const doc = await db.collection('config').doc(configDocId('estado')).get();
-        const estaActivo = doc.exists && doc.data().ignorarCierreHorario;
-        const nuevoEstado = !estaActivo;
-
-        const msg = nuevoEstado
-            ? '¿Activar la ventana de carga manual?\n\nLos partidos ya jugados quedarán desbloqueados para que la gente del físico pueda cargar sus predicciones.\n\n⚠️ Acordate de DESACTIVAR esto cuando terminen.'
-            : '¿Cerrar la ventana de carga manual?\n\nLos partidos volverán a cerrarse automáticamente por horario.';
-
-        if (!confirm(msg)) return;
-
-        await db.collection('config').doc(configDocId('estado')).set(
-            { ignorarCierreHorario: nuevoEstado }, { merge: true }
-        );
-        actualizarBtnOverride(nuevoEstado);
-        alert(nuevoEstado
-            ? '✅ Ventana activada. Los partidos están desbloqueados. Avisale a la gente del físico que cargue ahora.'
-            : '🔒 Ventana cerrada. Los partidos volvieron a su estado normal.'
-        );
-    } catch (err) {
-        console.error(err);
-        alert('Error al cambiar el estado de la ventana de carga.');
-    } finally {
-        if (btn) btn.disabled = false;
     }
 }
 
@@ -1417,3 +1461,132 @@ window.toggleCierreGlobal = async function() {
         if (btn) btn.disabled = false;
     }
 }
+
+// ─── BUSCAR PREDICCIONES POR USUARIO ─────────────────────────────────────────
+window.buscarPrediccionesUsuario = async function() {
+    const input = document.getElementById('buscar-usuario-input').value.trim().toLowerCase();
+    const div = document.getElementById('buscar-usuario-resultados');
+    if (!input) { div.innerHTML = '<p style="color:var(--danger);">Ingresá un nombre para buscar.</p>'; return; }
+
+    div.innerHTML = '<p>Buscando...</p>';
+
+    try {
+        // Traer usuarios, predicciones y partidos en paralelo
+        const [userSnap, predSnap, partSnap, resSnap] = await Promise.all([
+            queryTorneo('usuarios').get(),
+            queryTorneo('predicciones').get(),
+            queryTorneo('partidos').get(),
+            queryTorneo('resultados').get(),
+        ]);
+
+        // Buscar usuarios que coincidan con el texto
+        const usuariosMatch = [];
+        userSnap.forEach(d => {
+            if (d.data().nombre.toLowerCase().includes(input)) {
+                usuariosMatch.push({ id: d.id, ...d.data() });
+            }
+        });
+
+        if (usuariosMatch.length === 0) {
+            div.innerHTML = '<p>No se encontró ningún participante con ese nombre.</p>';
+            return;
+        }
+
+        // Mapas de lookup
+        const partidos = {};
+        partSnap.forEach(d => { partidos[d.id] = d.data(); });
+        const resultados = {};
+        resSnap.forEach(d => { resultados[d.data().partidoId] = d.data().resultado; });
+
+        // Agrupar predicciones por userId
+        const predPorUser = {};
+        predSnap.forEach(d => {
+            const p = { docId: d.id, ...d.data() };
+            if (!predPorUser[p.userId]) predPorUser[p.userId] = {};
+            // Agrupar por partidoId para detectar duplicados
+            if (!predPorUser[p.userId][p.partidoId]) predPorUser[p.userId][p.partidoId] = [];
+            predPorUser[p.userId][p.partidoId].push(p);
+        });
+
+        const etiqueta = { local: 'Local', empate: 'Empate', visitante: 'Visitante' };
+
+        let html = '';
+        usuariosMatch.forEach(u => {
+            const porPartido = predPorUser[u.id] || {};
+            const tienePreds = Object.keys(porPartido).length > 0;
+
+            html += `
+                <div style="border:1px solid var(--card-border); border-radius:10px; padding:1rem; margin-bottom:1rem;">
+                    <div style="font-weight:700; font-size:1rem; margin-bottom:0.25rem;">👤 ${u.nombre}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">
+                        📱 ${u.whatsapp} · 💰 Pago: ${u.pagoConfirmado ? '✅' : '❌'} · 🏆 Puntos: ${u.puntos || 0}
+                        <br><span style="font-size:0.72rem; opacity:0.6;">ID: ${u.id}</span>
+                    </div>
+            `;
+
+            if (!tienePreds) {
+                html += '<p style="color:var(--text-muted); font-size:0.85rem;">Sin predicciones registradas.</p>';
+            } else {
+                Object.entries(porPartido).forEach(([partidoId, preds]) => {
+                    const partido = partidos[partidoId];
+                    const resReal = resultados[partidoId];
+                    const esDuplicado = preds.length > 1;
+                    const esDoble = partido && (partido.local === "Independiente (América)" || partido.visitante === "Independiente (América)");
+
+                    html += `
+                        <div style="background:${esDuplicado ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.03)'}; 
+                             border:1px solid ${esDuplicado ? 'var(--danger)' : 'var(--card-border)'}; 
+                             border-radius:8px; padding:0.65rem; margin-bottom:0.5rem;">
+                            <div style="font-size:0.82rem; font-weight:600; margin-bottom:0.4rem;">
+                                ${esDuplicado ? '⚠️ DUPLICADO — ' : ''}
+                                ${partido ? `${partido.local} vs ${partido.visitante}${esDoble ? ' 🔥' : ''}` : `Partido ID: ${partidoId}`}
+                                ${resReal ? ` · Real: <strong>${etiqueta[resReal]}</strong>` : ''}
+                            </div>
+                            ${preds.map((pr, i) => {
+                                const acerto = resReal && pr.resultado === resReal;
+                                return `
+                                    <div style="display:flex; justify-content:space-between; align-items:center; 
+                                         padding:0.35rem 0.5rem; margin-bottom:3px;
+                                         background:${acerto ? 'rgba(34,197,94,0.1)' : 'rgba(0,0,0,0.2)'}; 
+                                         border-radius:6px; font-size:0.8rem;">
+                                        <span>
+                                            Pronóstico ${preds.length > 1 ? `#${i+1}` : ''}: 
+                                            <strong>${etiqueta[pr.resultado] || pr.resultado}</strong>
+                                            ${acerto ? ' ✅' : (resReal ? ' ❌' : '')}
+                                        </span>
+                                        <button onclick="borrarPrediccion('${pr.docId}', '${u.id}')" 
+                                            style="background:var(--danger); color:white; border:none; 
+                                                   border-radius:5px; padding:2px 8px; cursor:pointer; font-size:0.75rem;">
+                                            Borrar
+                                        </button>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                });
+            }
+
+            html += '</div>';
+        });
+
+        div.innerHTML = html;
+
+    } catch (err) {
+        console.error(err);
+        div.innerHTML = '<p style="color:var(--danger);">Error al buscar. Revisá la consola.</p>';
+    }
+};
+
+window.borrarPrediccion = async function(docId, userId) {
+    if (!confirm('¿Borrar esta predicción? Esta acción no se puede deshacer.')) return;
+    try {
+        await db.collection('predicciones').doc(docId).delete();
+        alert('✅ Predicción borrada. Recalculá los puntos para actualizar el ranking.');
+        // Refrescar la búsqueda
+        buscarPrediccionesUsuario();
+    } catch (err) {
+        console.error(err);
+        alert('Error al borrar la predicción.');
+    }
+};

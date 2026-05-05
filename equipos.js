@@ -46,6 +46,7 @@ const TORNEOS_CONFIG = {
                 "Social (González Moreno)",
                 "Gorra de Cuero (Carlos Tejedor)",
                 "Independiente (América)",
+                "Sportivo (América)",
                 "Social (Tres Algarrobos)",
                 "Los Once (Colonia Seré)",
                 "Barrio Norte",
