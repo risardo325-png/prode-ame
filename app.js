@@ -366,12 +366,29 @@ async function enviarPredicciones() {
         console.error("Error al verificar estado global:", err);
     }
 
-    // 🛑 VALIDACIÓN DE USUARIO EXISTENTE POR WHATSAPP
+    // 🔄 VALIDACIÓN DE USUARIO EXISTENTE POR WHATSAPP
+    // Si ya existe, lo reconocemos y reutilizamos su cuenta (nueva fecha)
+    let usuarioExistenteId = null;
+    let usuarioExistentePuntos = 0;
+    let usuarioExistentePago = false;
     try {
         const existUser = await queryTorneo('usuarios').where('whatsapp', '==', whatsapp).get();
         if (!existUser.empty) {
-            alert("Ya existe una participación con este número de WhatsApp. No podés participar dos veces.");
-            return;
+            const docExistente = existUser.docs[0];
+            const dataExistente = docExistente.data();
+
+            // Verificar si ya tiene predicciones en esta fecha
+            const predExistentes = await queryTorneo('predicciones')
+                .where('userId', '==', docExistente.id).get();
+            if (!predExistentes.empty) {
+                alert("Ya enviaste tus predicciones para esta fecha. ¡Buena suerte!");
+                return;
+            }
+
+            // Lo reconocemos: guardamos su id y puntos para no pisarlos
+            usuarioExistenteId = docExistente.id;
+            usuarioExistentePuntos = dataExistente.puntos || 0;
+            usuarioExistentePago = dataExistente.pagoConfirmado || false;
         }
     } catch(err) {
         console.error("Error al validar WhatsApp:", err);
@@ -433,21 +450,33 @@ async function enviarPredicciones() {
 
     try {
 
-        // 1. Guardar usuario
-        const userRef = await db.collection('usuarios').add({
-            nombre: nombre,
-            whatsapp: whatsapp,
-            activo: true,          // siempre acceso a la app
-            pagoConfirmado: false, // solo admin lo cambia a true
-            intentoPago: false,    // se actualiza a true si presiona "Ya pagué"
-            puntos: 0,
-            torneo: torneoActual,
-            fechaRegistro: firebase.firestore.FieldValue.serverTimestamp(),
-            prediccionGol: prediccionGolValor,
-            jugadorGol: document.getElementById('gol-fecha-jugador').innerText
-        });
-
-        const userId = userRef.id;
+        // 1. Guardar o actualizar usuario
+        let userId;
+        if (usuarioExistenteId) {
+            // Usuario de fecha anterior — actualizamos nombre y gol, conservamos puntos y pago
+            userId = usuarioExistenteId;
+            await db.collection('usuarios').doc(userId).update({
+                nombre: nombre,
+                prediccionGol: prediccionGolValor,
+                jugadorGol: document.getElementById('gol-fecha-jugador').innerText,
+                fechaUltimaParticipacion: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+        } else {
+            // Usuario nuevo
+            const userRef = await db.collection('usuarios').add({
+                nombre: nombre,
+                whatsapp: whatsapp,
+                activo: true,
+                pagoConfirmado: false,
+                intentoPago: false,
+                puntos: 0,
+                torneo: torneoActual,
+                fechaRegistro: firebase.firestore.FieldValue.serverTimestamp(),
+                prediccionGol: prediccionGolValor,
+                jugadorGol: document.getElementById('gol-fecha-jugador').innerText
+            });
+            userId = userRef.id;
+        }
 
         // 2. Guardar predicciones en batch
         const batch = db.batch();
@@ -492,8 +521,8 @@ async function cargarRanking() {
         let users = [];
         snapshot.forEach(doc => users.push(doc.data()));
 
-        // 🔑 FILTRAR: solo usuarios con pago confirmado aparecen en el ranking
-        const usersConPago = users.filter(u => u.pagoConfirmado === true);
+        // 🔑 FILTRAR: aparecen en el ranking si tienen pago confirmado O puntos acumulados
+        const usersConPago = users.filter(u => u.pagoConfirmado === true || (u.puntos || 0) > 0);
 
         if (usersConPago.length === 0) {
             rankingDiv.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:1rem;">Aún no hay participantes con pago confirmado.</p>';
@@ -1116,8 +1145,9 @@ async function _calcularPuntosInterno() {
         const userId = userDoc.id;
         const userData = userDoc.data();
         
-        // Usuarios sin pago: siempre quedan en 0
-        if (!userData.pagoConfirmado) {
+        // Usuarios sin pago y sin puntos previos: quedan en 0
+        // Usuarios con puntos acumulados: se les calculan igualmente
+        if (!userData.pagoConfirmado && (userData.puntos || 0) === 0) {
             batch.update(db.collection('usuarios').doc(userId), { puntos: 0 });
             return;
         }
@@ -1145,7 +1175,10 @@ async function _calcularPuntosInterno() {
             }
         }
 
-        batch.update(db.collection('usuarios').doc(userId), { puntos: totalPuntos });
+        batch.update(db.collection('usuarios').doc(userId), { 
+            puntos: (userData.puntosHistoricos || 0) + totalPuntos,
+            puntosEsteFecha: totalPuntos
+        });
     });
 
     await batch.commit();
@@ -1261,13 +1294,20 @@ window.avanzarFecha = async function() {
         if (opsCounter > 0) batches.push(currentBatch.commit());
         await Promise.all(batches);
 
-        // Resetear prediccionGol de cada usuario pero NO sus puntos
+        // Conservar puntos acumulados y resetear pago para la nueva fecha
         const usuariosSnap = await queryTorneo('usuarios').get();
         const userBatches = [];
         let ub = db.batch();
         let uOps = 0;
         usuariosSnap.forEach(doc => {
-            ub.update(doc.ref, { prediccionGol: null, jugadorGol: '' });
+            const data = doc.data();
+            ub.update(doc.ref, { 
+                prediccionGol: null, 
+                jugadorGol: '',
+                puntosHistoricos: data.puntos || 0,  // guardar acumulado
+                puntosEsteFecha: 0,
+                pagoConfirmado: false,  // resetear pago para nueva fecha
+            });
             uOps++;
             if (uOps === 490) {
                 userBatches.push(ub.commit());
