@@ -154,7 +154,7 @@
         <section class="card mt-2">
             <h2>👥 Participantes y Pagos</h2>
             <p class="subtitle" style="margin-bottom: 1rem;">
-                Solo los jugadores con <strong style="color:var(--primary)">pago confirmado</strong> aparecen en el ranking.
+                Aparecen en el ranking los jugadores con <strong style="color:var(--primary)">pago confirmado</strong> o con <strong style="color:var(--primary)">puntos acumulados</strong>.
             </p>
             <div class="table-responsive">
                 <table id="usuarios-table">
@@ -188,6 +188,24 @@
                 <button onclick="buscarPrediccionesUsuario()" class="btn-primary" style="white-space:nowrap;">Buscar</button>
             </div>
             <div id="buscar-usuario-resultados"></div>
+        </section>
+
+        <!-- PRONÓSTICOS POR PARTIDO -->
+        <section class="card mt-2">
+            <h2>📊 Pronósticos por Partido</h2>
+            <p class="subtitle" style="margin-bottom: 1rem;">
+                Quién apostó a qué resultado y si acertó.
+            </p>
+            <div id="pronosticos-list"><p>Cargando...</p></div>
+        </section>
+
+        <!-- HISTORIAL POR FECHAS -->
+        <section class="card mt-2">
+            <h2>📅 Historial por Fechas</h2>
+            <p class="subtitle" style="margin-bottom: 1rem;">
+                Resultados de todos los participantes en cada fecha cerrada.
+            </p>
+            <div id="historial-participacion-list"><p>Cargando...</p></div>
         </section>
 
     </main>

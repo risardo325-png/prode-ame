@@ -223,10 +223,17 @@ async function cargarPartidosUsuario() {
 
         // Verificar estado global de cierre de fecha
         let fechaCerradaGlobal = false;
+        let ignorarCierreHorario = false;
         try {
             const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
             if (estadoDoc.exists && estadoDoc.data().fechaCerrada) {
                 fechaCerradaGlobal = true;
+            }
+            if (estadoDoc.exists && estadoDoc.data().ignorarCierreHorario) {
+                ignorarCierreHorario = true;
+                window._ignorarCierreHorario = true;
+            } else {
+                window._ignorarCierreHorario = false;
             }
         } catch (e) { console.error("Error al leer estado global:", e); }
 
@@ -253,8 +260,8 @@ async function cargarPartidosUsuario() {
             const imgLocal = getEscudo(partido.local);
             const imgVisitante = getEscudo(partido.visitante);
             
-            // Auto-cerrar de forma robusta por timestamp
-            let cerrado = fechaCerradaGlobal || partido.cerrado || (fechaPartido < ahora);
+            // Auto-cerrar por timestamp salvo que la ventana de carga manual esté activa
+            let cerrado = fechaCerradaGlobal || partido.cerrado || (fechaPartido < ahora && !ignorarCierreHorario);
             if (cerrado) algunCerrado = true;
             const disabledAttr = cerrado ? 'disabled' : '';
             
@@ -403,10 +410,10 @@ async function enviarPredicciones() {
         const pInfo = partidosGlobal.find(p => p.id === pId);
         if (!pInfo) return;
 
-        // Validación Anti-Trampa backend-side (JS logical block)
+        // Validación Anti-Trampa: respeta el flag de ventana de carga manual
         const ahora = Date.now();
         const fechaPartido = new Date(pInfo.fecha).getTime();
-        const isClosed = pInfo.cerrado || (fechaPartido < ahora);
+        const isClosed = pInfo.cerrado || (fechaPartido < ahora && !window._ignorarCierreHorario);
         
         if (isClosed) return; // Se descarta cualquier input inyectado si ya está cerrado
 
@@ -505,7 +512,7 @@ async function enviarPredicciones() {
         alert("Hubo un error al guardar. Intentá de nuevo.");
     } finally {
         btn.disabled = false;
-        btn.textContent = '¡Participar!';
+        btn.textContent = '¡Confirmar Predicciones!';
     }
 }
 
@@ -545,7 +552,7 @@ async function cargarRanking() {
             html += `
                 <div class="ranking-item ${topClass}">
                     <div class="ranking-pos">${posEmoji}</div>
-                    <div class="ranking-name">${user.nombre} <span style="color:var(--primary); font-size:0.75rem;" title="Pago confirmado">✔</span></div>
+                    <div class="ranking-name">${user.nombre}${user.pagoConfirmado ? ' <span style="color:var(--primary); font-size:0.75rem;" title="Pago confirmado">✔</span>' : ''}</div>
                     <div class="ranking-pts">
                         <span class="pts-number">${user.puntos || 0}</span>
                         <span class="pts-exactos">pts</span>
@@ -740,9 +747,20 @@ async function initAdminApp() {
     const configForm = document.getElementById('config-gol-form');
     if (configForm) configForm.addEventListener('submit', guardarConfigGol);
 
+    const btnOverride = document.getElementById('btn-override-horario');
+    if (btnOverride) {
+        db.collection('config').doc(configDocId('estado')).get().then(doc => {
+            const activo = doc.exists && doc.data().ignorarCierreHorario;
+            actualizarBtnOverride(activo);
+        }).catch(() => {});
+        btnOverride.addEventListener('click', toggleOverrideHorario);
+    }
+
     await cargarPartidosAdmin();
     await cargarUsuariosAdmin();
     await cargarConfigGolAdmin();
+    await cargarPronosticosAdmin();
+    await cargarHistorialParticipacion();
 }
 
 async function guardarPartido(e) {
@@ -1359,6 +1377,232 @@ window.avanzarFecha = async function() {
         if (btn) { btn.disabled = false; btn.textContent = '➡️ Avanzar a Nueva Fecha'; }
     }
 };
+
+// ─── VENTANA DE CARGA MANUAL ──────────────────────────────────────────────────
+function actualizarBtnOverride(activo) {
+    const btn = document.getElementById('btn-override-horario');
+    if (!btn) return;
+    if (activo) {
+        btn.textContent = '🟢 Ventana de Carga ACTIVA — Desactivar';
+        btn.style.background = 'linear-gradient(135deg, #16a34a, #15803d)';
+    } else {
+        btn.textContent = '🕐 Activar Ventana de Carga Manual';
+        btn.style.background = 'linear-gradient(135deg, #7c3aed, #4f46e5)';
+    }
+}
+
+window.toggleOverrideHorario = async function() {
+    const btn = document.getElementById('btn-override-horario');
+    if (btn) btn.disabled = true;
+    try {
+        const doc = await db.collection('config').doc(configDocId('estado')).get();
+        const estaActivo = doc.exists && doc.data().ignorarCierreHorario;
+        const nuevoEstado = !estaActivo;
+
+        const msg = nuevoEstado
+            ? '¿Activar la ventana de carga manual?\n\nLos partidos ya jugados quedarán desbloqueados.\n\n⚠️ Acordate de DESACTIVAR esto cuando terminen.'
+            : '¿Cerrar la ventana de carga manual?\n\nLos partidos volverán a cerrarse automáticamente por horario.';
+
+        if (!confirm(msg)) return;
+
+        await db.collection('config').doc(configDocId('estado')).set(
+            { ignorarCierreHorario: nuevoEstado }, { merge: true }
+        );
+        actualizarBtnOverride(nuevoEstado);
+        alert(nuevoEstado
+            ? '✅ Ventana activada. Avisale a la gente del físico que cargue ahora.'
+            : '🔒 Ventana cerrada. Los partidos volvieron a su estado normal.'
+        );
+    } catch (err) {
+        console.error(err);
+        alert('Error al cambiar el estado de la ventana de carga.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+};
+
+// ─── PRONÓSTICOS POR PARTIDO ──────────────────────────────────────────────────
+async function cargarPronosticosAdmin() {
+    const div = document.getElementById('pronosticos-list');
+    if (!div) return;
+    div.innerHTML = '<p>Cargando...</p>';
+
+    try {
+        const [partSnap, resSnap, predSnap, userSnap] = await Promise.all([
+            queryTorneo('partidos').get(),
+            queryTorneo('resultados').get(),
+            queryTorneo('predicciones').get(),
+            queryTorneo('usuarios').get(),
+        ]);
+
+        const resultadoReal = {};
+        resSnap.forEach(d => { resultadoReal[d.data().partidoId] = d.data().resultado; });
+
+        const nombreUsuario = {};
+        userSnap.forEach(d => { nombreUsuario[d.id] = d.data().nombre; });
+
+        const predPorPartido = {};
+        predSnap.forEach(d => {
+            const p = d.data();
+            if (!predPorPartido[p.partidoId]) predPorPartido[p.partidoId] = [];
+            predPorPartido[p.partidoId].push(p);
+        });
+
+        let partidos = [];
+        partSnap.forEach(d => partidos.push({ id: d.id, ...d.data() }));
+        partidos.sort((a, b) => {
+            const jA = a.jornada || 0, jB = b.jornada || 0;
+            if (jA !== jB) return jA - jB;
+            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3 };
+            return (catOrder[a.categoria] || 99) - (catOrder[b.categoria] || 99);
+        });
+
+        if (partidos.length === 0) {
+            div.innerHTML = '<p>No hay partidos cargados.</p>';
+            return;
+        }
+
+        const etiqueta = { local: 'Local', empate: 'Empate', visitante: 'Visitante' };
+
+        let html = '';
+        partidos.forEach(p => {
+            const res = resultadoReal[p.id];
+            const preds = predPorPartido[p.id] || [];
+            const esDoble = p.local === "Independiente (América)" || p.visitante === "Independiente (América)";
+            const pts = esDoble ? 6 : 3;
+            const resLabel = res
+                ? `<strong style="color:var(--primary)">${etiqueta[res]}</strong> <span style="font-size:0.75rem; color:var(--text-muted)">(${pts} pts)</span>`
+                : '<span style="color:var(--text-muted)">Sin resultado</span>';
+
+            const votos = { local: [], empate: [], visitante: [] };
+            preds.forEach(pr => {
+                const nombre = nombreUsuario[pr.userId] || 'Desconocido';
+                if (votos[pr.resultado]) votos[pr.resultado].push(nombre);
+            });
+
+            html += `
+                <div style="border:1px solid var(--card-border); border-radius:10px; padding:1rem; margin-bottom:1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:0.75rem;">
+                        <div>
+                            <span style="font-size:0.75rem; color:var(--text-muted);">J${p.jornada || '?'} · ${p.categoria || 'General'}</span>
+                            <div style="font-weight:700; font-size:0.95rem;">${p.local} <span style="color:var(--text-muted)">vs</span> ${p.visitante}${esDoble ? ' <span style="color:#ef4444; font-size:0.75rem;">🔥 x2</span>' : ''}</div>
+                        </div>
+                        <div style="text-align:right; font-size:0.85rem;">Resultado: ${resLabel}</div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; font-size:0.82rem;">
+                        ${['local','empate','visitante'].map(op => {
+                            const lista = votos[op];
+                            const esGanador = res === op;
+                            const bg = esGanador ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.04)';
+                            const border = esGanador ? '1px solid #22c55e' : '1px solid var(--card-border)';
+                            return `
+                                <div style="background:${bg}; border:${border}; border-radius:8px; padding:0.5rem;">
+                                    <div style="font-weight:700; margin-bottom:4px; color:${esGanador ? '#22c55e' : 'var(--text-main)'};">
+                                        ${etiqueta[op]} ${esGanador ? '✓' : ''} <span style="font-weight:400; color:var(--text-muted);">(${lista.length})</span>
+                                    </div>
+                                    ${lista.length === 0
+                                        ? '<div style="color:var(--text-muted); font-style:italic;">Nadie</div>'
+                                        : lista.map(n => `<div style="padding:1px 0;">• ${n}</div>`).join('')
+                                    }
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    ${preds.length === 0 ? '<p style="color:var(--text-muted); font-size:0.8rem; margin-top:0.5rem; margin-bottom:0;">Nadie apostó en este partido aún.</p>' : ''}
+                </div>
+            `;
+        });
+
+        div.innerHTML = html;
+    } catch (err) {
+        console.error('Error cargando pronósticos:', err);
+        div.innerHTML = '<p>Error al cargar. Verificá tu conexión.</p>';
+    }
+}
+
+// ─── HISTORIAL DE PARTICIPACIÓN POR FECHAS ────────────────────────────────────
+async function cargarHistorialParticipacion() {
+    const div = document.getElementById('historial-participacion-list');
+    if (!div) return;
+    div.innerHTML = '<p>Cargando...</p>';
+
+    try {
+        const histSnap = await db.collection('historial_fechas')
+            .where('torneo', '==', torneoActual)
+            .orderBy('numeroFecha', 'desc')
+            .get();
+
+        if (histSnap.empty) {
+            div.innerHTML = '<p style="color:var(--text-muted);">Aún no hay fechas cerradas con historial.</p>';
+            return;
+        }
+
+        let html = '';
+        histSnap.forEach(doc => {
+            const data = doc.data();
+            const ranking = data.ranking || [];
+            const ganador = data.ganador;
+
+            html += `
+                <div style="border:1px solid var(--card-border); border-radius:10px; padding:1rem; margin-bottom:1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:6px;">
+                        <div style="font-weight:700; font-size:1rem;">📅 ${data.fecha || `Fecha ${data.numeroFecha}`}</div>
+                        ${ganador ? `<div style="font-size:0.82rem; background:rgba(251,191,36,0.15); border:1px solid #fbbf24; color:#fbbf24; padding:3px 10px; border-radius:20px;">🥇 ${ganador.nombre} — ${ganador.puntos} pts</div>` : ''}
+                    </div>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
+                        ${ranking.map((u, i) => `
+                            <div style="background:rgba(255,255,255,0.04); border:1px solid var(--card-border); border-radius:8px; padding:0.4rem 0.6rem; font-size:0.82rem; display:flex; justify-content:space-between;">
+                                <span>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`} ${u.nombre}</span>
+                                <strong style="color:var(--primary)">${u.puntos} pts</strong>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        div.innerHTML = html;
+    } catch (err) {
+        console.error('Error cargando historial:', err);
+        // Si falla por índice faltante, intentar sin orderBy
+        try {
+            const histSnap2 = await db.collection('historial_fechas')
+                .where('torneo', '==', torneoActual).get();
+            if (histSnap2.empty) {
+                div.innerHTML = '<p style="color:var(--text-muted);">Aún no hay fechas cerradas con historial.</p>';
+                return;
+            }
+            let fechas = [];
+            histSnap2.forEach(d => fechas.push(d.data()));
+            fechas.sort((a, b) => (b.numeroFecha || 0) - (a.numeroFecha || 0));
+
+            let html2 = '';
+            fechas.forEach(data => {
+                const ranking = data.ranking || [];
+                const ganador = data.ganador;
+                html2 += `
+                    <div style="border:1px solid var(--card-border); border-radius:10px; padding:1rem; margin-bottom:1rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:6px;">
+                            <div style="font-weight:700; font-size:1rem;">📅 ${data.fecha || `Fecha ${data.numeroFecha}`}</div>
+                            ${ganador ? `<div style="font-size:0.82rem; background:rgba(251,191,36,0.15); border:1px solid #fbbf24; color:#fbbf24; padding:3px 10px; border-radius:20px;">🥇 ${ganador.nombre} — ${ganador.puntos} pts</div>` : ''}
+                        </div>
+                        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
+                            ${ranking.map((u, i) => `
+                                <div style="background:rgba(255,255,255,0.04); border:1px solid var(--card-border); border-radius:8px; padding:0.4rem 0.6rem; font-size:0.82rem; display:flex; justify-content:space-between;">
+                                    <span>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`} ${u.nombre}</span>
+                                    <strong style="color:var(--primary)">${u.puntos} pts</strong>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            div.innerHTML = html2;
+        } catch(err2) {
+            div.innerHTML = '<p style="color:var(--danger);">Error al cargar historial.</p>';
+        }
+    }
+}
 
 window.resetearFecha = async function() {
     if (!confirm("⚠️ ¿Estás seguro que querés resetear la fecha? Esto eliminará TODOS los participantes, puntos y sus predicciones. Esta acción NO se puede deshacer.")) return;
