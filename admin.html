@@ -123,6 +123,10 @@
         <section class="card mt-2">
             <h2>🛠️ Acciones de la Fecha</h2>
             <button id="btn-calcular-puntos" class="btn-secondary w-100">Calcular Puntos de Todos</button>
+            <button id="btn-ranking-fecha" class="btn-secondary w-100" style="margin-top:10px;" onclick="toggleRankingFecha()">
+                🏆 Ver Tabla de Esta Fecha
+            </button>
+            <div id="ranking-fecha-container" style="display:none; margin-top:1rem;"></div>
             <hr style="margin: 15px 0; border-color: var(--card-border);">
             <button id="btn-cerrar-fecha" class="btn-primary w-100 mb-2"
                 style="background: linear-gradient(135deg, var(--secondary), #0284c7); margin-bottom: 10px;">Cerrar Fecha Global</button>
@@ -143,6 +147,12 @@
             <details>
                 <summary style="cursor:pointer; color:var(--danger); font-size:0.85rem; font-weight:600;">⚠️ Zona peligrosa</summary>
                 <div style="margin-top:10px;">
+                    <button onclick="fijarPuntosHistoricos()" class="btn-primary w-100" style="background:linear-gradient(135deg,#0891b2,#0e7490); margin-bottom:10px;">
+                        📌 Fijar Puntos Actuales como Históricos
+                    </button>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px; text-align:center;">
+                        Usá esto si olvidaste presionar "Avanzar Fecha" antes de cargar la nueva. Fija los puntos actuales como base histórica.
+                    </p>
                     <button id="btn-resetear-fecha" class="btn-primary w-100" style="background: linear-gradient(135deg, var(--accent), #d97706);">
                         🔄 Resetear TODO (borra usuarios y puntos)
                     </button>
@@ -154,8 +164,25 @@
         <section class="card mt-2">
             <h2>👥 Participantes y Pagos</h2>
             <p class="subtitle" style="margin-bottom: 1rem;">
-                Aparecen en el ranking los jugadores con <strong style="color:var(--primary)">pago confirmado</strong> o con <strong style="color:var(--primary)">puntos acumulados</strong>.
+                Aparecen en el ranking quienes tienen <strong style="color:var(--primary)">pago confirmado</strong> o <strong style="color:var(--primary)">puntos acumulados</strong> de fechas anteriores.
             </p>
+            <!-- BUSCADOR Y FILTROS -->
+            <div style="display:flex; gap:8px; margin-bottom:0.75rem; flex-wrap:wrap;">
+                <div style="position:relative; flex:1; min-width:150px;">
+                    <span style="position:absolute; left:10px; top:50%; transform:translateY(-50%);">🔍</span>
+                    <input type="text" id="filtro-usuario" placeholder="Buscar nombre..."
+                        oninput="filtrarUsuarios()"
+                        style="width:100%; padding:0.65rem 0.65rem 0.65rem 2.2rem; border-radius:8px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white; -webkit-text-fill-color:white; caret-color:white; box-sizing:border-box;">
+                </div>
+                <select id="filtro-pago" onchange="filtrarUsuarios()"
+                    style="padding:0.65rem; border-radius:8px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white;">
+                    <option value="todos">Todos</option>
+                    <option value="pagados">✅ Pagaron</option>
+                    <option value="sin-pago">❌ Sin pago</option>
+                    <option value="avisaron">💸 Avisaron</option>
+                </select>
+            </div>
+            <div id="filtro-contador" style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;"></div>
             <div class="table-responsive">
                 <table id="usuarios-table">
                     <thead>
@@ -165,6 +192,8 @@
                             <th>Pts</th>
                             <th>Intento</th>
                             <th>Pago ✓</th>
+                            <th>Reset</th>
+                            <th>✏️</th>
                         </tr>
                     </thead>
                     <tbody id="usuarios-tbody">
@@ -174,6 +203,15 @@
                     </tbody>
                 </table>
             </div>
+        </section>
+
+        <!-- PRONÓSTICOS POR PARTIDO -->
+        <section class="card mt-2">
+            <h2>📊 Pronósticos por Partido</h2>
+            <p class="subtitle" style="margin-bottom: 1rem;">
+                Quién apostó a qué resultado y si acertó. Incluye el Gol de la Fecha.
+            </p>
+            <div id="pronosticos-list"><p>Cargando...</p></div>
         </section>
 
         <!-- BUSCAR Y LIMPIAR PREDICCIONES DUPLICADAS -->
@@ -190,25 +228,55 @@
             <div id="buscar-usuario-resultados"></div>
         </section>
 
-        <!-- PRONÓSTICOS POR PARTIDO -->
-        <section class="card mt-2">
-            <h2>📊 Pronósticos por Partido</h2>
-            <p class="subtitle" style="margin-bottom: 1rem;">
-                Quién apostó a qué resultado y si acertó.
-            </p>
-            <div id="pronosticos-list"><p>Cargando...</p></div>
-        </section>
-
-        <!-- HISTORIAL POR FECHAS -->
-        <section class="card mt-2">
-            <h2>📅 Historial por Fechas</h2>
-            <p class="subtitle" style="margin-bottom: 1rem;">
-                Resultados de todos los participantes en cada fecha cerrada.
-            </p>
-            <div id="historial-participacion-list"><p>Cargando...</p></div>
-        </section>
-
     </main>
+
+    <!-- MODAL EDITAR / FUSIONAR USUARIO -->
+    <div id="modal-usuario" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; align-items:center; justify-content:center; padding:1rem;">
+        <div style="background:#1e2433; border:1px solid var(--card-border); border-radius:14px; padding:1.5rem; width:100%; max-width:420px; position:relative;">
+            <button onclick="cerrarModalUsuario()" style="position:absolute; top:12px; right:14px; background:none; border:none; color:var(--text-muted); font-size:1.3rem; cursor:pointer;">✕</button>
+
+            <!-- EDITAR -->
+            <div id="modal-editar">
+                <h3 style="margin:0 0 1rem;">✏️ Editar Participante</h3>
+                <input type="hidden" id="edit-user-id">
+                <div class="form-group">
+                    <label>Nombre:</label>
+                    <input type="text" id="edit-nombre" style="width:100%; padding:0.7rem; border-radius:8px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white; -webkit-text-fill-color:white; caret-color:white; box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp:</label>
+                    <input type="tel" id="edit-whatsapp" style="width:100%; padding:0.7rem; border-radius:8px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white; -webkit-text-fill-color:white; caret-color:white; box-sizing:border-box;">
+                </div>
+                <div style="display:flex; gap:8px; margin-top:1rem;">
+                    <button onclick="guardarEdicionUsuario()" class="btn-primary" style="flex:1;">Guardar</button>
+                    <button onclick="mostrarFusion()" class="btn-secondary" style="flex:1;">🔀 Fusionar con otro</button>
+                </div>
+            </div>
+
+            <!-- FUSIONAR -->
+            <div id="modal-fusionar" style="display:none;">
+                <h3 style="margin:0 0 0.5rem;">🔀 Fusionar Participantes</h3>
+                <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:1rem;">
+                    Elegí el duplicado a eliminar. Sus predicciones y puntos se transferirán al participante principal y el duplicado se borrará.
+                </p>
+                <div class="form-group">
+                    <label>Participante principal:</label>
+                    <div id="fusion-principal" style="padding:0.6rem; background:rgba(34,197,94,0.1); border:1px solid #22c55e; border-radius:8px; font-size:0.88rem; font-weight:600;"></div>
+                </div>
+                <div class="form-group">
+                    <label>Duplicado a eliminar:</label>
+                    <select id="fusion-duplicado" style="width:100%; padding:0.7rem; border-radius:8px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white;">
+                        <option value="">— Seleccioná el duplicado —</option>
+                    </select>
+                </div>
+                <div id="fusion-preview" style="display:none; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem; background:rgba(0,0,0,0.2); padding:0.6rem; border-radius:8px;"></div>
+                <div style="display:flex; gap:8px; margin-top:1rem;">
+                    <button onclick="ejecutarFusion()" class="btn-primary" style="flex:1; background:linear-gradient(135deg,#7c3aed,#4f46e5);">Fusionar</button>
+                    <button onclick="mostrarEditar()" class="btn-secondary" style="flex:1;">← Volver</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>

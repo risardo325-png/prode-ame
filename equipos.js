@@ -27,7 +27,9 @@ const TORNEOS_CONFIG = {
                 "Barrio Norte",
                 "Jorge Newbery (Fortín Olavarría)",
                 "Atlético Rivadavia",
-                "Racing F.B.C. (Fortín Olavarría)"
+                "Racing F.B.C. (Fortín Olavarría)",
+                "Ingeniero White",
+                "Eclipse (Villegas)"
             ].sort(),
             Tercera: [
                 "Fútbol Club Tres Algarrobos",

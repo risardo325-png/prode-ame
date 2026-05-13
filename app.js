@@ -77,17 +77,23 @@ function getEscudo(nombre) {
     const key = normalizarNombre(nombre);
     const ruta = `/img/escudos/${key}.png`;
     
-    // Inteligencia para fallback: obtenemos la versión genérica (sin localidad)
-    let nombreBase = nombre.replace(/\s*\(.*?\)/g, ""); // "Social (González)" -> "Social"
+    let nombreBase = nombre.replace(/\s*\(.*?\)/g, "");
     let keyBase = normalizarNombre(nombreBase);
     const rutaBase = `/img/escudos/${keyBase}.png`;
+
+    // Escudos que necesitan tamaño personalizado
+    const tamaños = {
+        'ingeniero-white': '90%',
+        'eclipse-villegas': '90%',
+    };
+    const size = tamaños[key] || '70%';
 
     console.log("Equipo:", nombre);
     console.log("Archivo generado:", key);
 
     return `
       <div class="escudo-container">
-        <img src="${ruta}" alt="${nombre}" data-fallback="${rutaBase}">
+        <img src="${ruta}" alt="${nombre}" data-fallback="${rutaBase}" style="width:${size}; height:${size};">
       </div>
     `;
 }
@@ -571,13 +577,13 @@ async function cargarRanking() {
 
 async function cargarConfigGolUser() {
     try {
-        const doc = await db.collection('config').doc(configDocId('general')).get();
+        const doc = await db.collection('config').doc(configDocId('gol')).get();
         if (doc.exists) {
             const data = doc.data();
-            if (data.jugadorGol) {
+            if (data.jugador) {
                 const container = document.getElementById('gol-fecha-container');
                 container.style.display = 'block';
-                document.getElementById('gol-fecha-jugador').innerText = data.jugadorGol;
+                document.getElementById('gol-fecha-jugador').innerText = data.jugador;
 
                 if (data.cerrado) {
                     document.getElementById('gol-fecha-jugador').innerText += " (CERRADA)";
@@ -760,7 +766,7 @@ async function initAdminApp() {
     await cargarUsuariosAdmin();
     await cargarConfigGolAdmin();
     await cargarPronosticosAdmin();
-    await cargarHistorialParticipacion();
+    await cargarHistorialFechas();
 }
 
 async function guardarPartido(e) {
@@ -1083,20 +1089,249 @@ async function cargarUsuariosAdmin() {
                 : `<button onclick="togglePago('${uId}', true)" style="background:rgba(255,255,255,0.07); color:var(--text-muted); border:1px solid var(--card-border); border-radius:8px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; letter-spacing:0.5px;">Marcar Pagado</button>`;
 
             html += `
-                <tr id="row-${uId}">
+                <tr id="row-${uId}" data-nombre="${u.nombre.toLowerCase()}" data-pago="${u.pagoConfirmado ? 'true' : 'false'}" data-aviso="${u.intentoPago ? 'true' : 'false'}">
                     <td>${u.nombre}</td>
                     <td><a href="https://wa.me/${u.whatsapp}" target="_blank">${u.whatsapp}</a></td>
                     <td>${u.puntos || 0}</td>
                     <td style="text-align:center;">${intentoBadge}</td>
                     <td style="text-align:center;">${pagoBtn}</td>
+                    <td style="text-align:center;">
+                        <button onclick="resetearPrediccionesUsuario('${uId}', '${u.nombre.replace(/'/g, "\\'")}')"
+                            title="Borrar predicciones de esta fecha"
+                            style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:5px 8px; font-size:0.8rem; cursor:pointer;">
+                            🗑️
+                        </button>
+                    </td>
+                    <td style="text-align:center;">
+                        <button onclick="abrirModalUsuario('${uId}', '${u.nombre.replace(/'/g, "\\'")}', '${u.whatsapp}')"
+                            title="Editar o fusionar"
+                            style="background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); border-radius:8px; padding:5px 8px; font-size:0.8rem; cursor:pointer;">
+                            ✏️
+                        </button>
+                    </td>
                 </tr>
             `;
         });
         tbody.innerHTML = html;
+        // Mostrar contador inicial
+        const contador = document.getElementById('filtro-contador');
+        if (contador) contador.textContent = `${users.length} participantes en total`;
     } catch (error) {
         console.error("Error:", error);
     }
 }
+
+// ─── FILTRO EN TIEMPO REAL DE PARTICIPANTES ───────────────────────────────────
+// ─── EDITAR / FUSIONAR USUARIO ────────────────────────────────────────────────
+let _todosLosUsuarios = []; // cache para el selector de fusión
+
+window.abrirModalUsuario = function(userId, nombre, whatsapp) {
+    document.getElementById('edit-user-id').value = userId;
+    document.getElementById('edit-nombre').value = nombre;
+    document.getElementById('edit-whatsapp').value = whatsapp;
+    document.getElementById('fusion-principal').textContent = `${nombre} (${whatsapp})`;
+    mostrarEditar();
+    const modal = document.getElementById('modal-usuario');
+    modal.style.display = 'flex';
+};
+
+window.cerrarModalUsuario = function() {
+    document.getElementById('modal-usuario').style.display = 'none';
+};
+
+window.mostrarEditar = function() {
+    document.getElementById('modal-editar').style.display = 'block';
+    document.getElementById('modal-fusionar').style.display = 'none';
+};
+
+window.mostrarFusion = async function() {
+    document.getElementById('modal-editar').style.display = 'none';
+    document.getElementById('modal-fusionar').style.display = 'block';
+
+    const principalId = document.getElementById('edit-user-id').value;
+    const select = document.getElementById('fusion-duplicado');
+    select.innerHTML = '<option value="">— Cargando... —</option>';
+
+    try {
+        const snap = await queryTorneo('usuarios').get();
+        _todosLosUsuarios = [];
+        snap.forEach(d => { if (d.id !== principalId) _todosLosUsuarios.push({ id: d.id, ...d.data() }); });
+        _todosLosUsuarios.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+        select.innerHTML = '<option value="">— Seleccioná el duplicado —</option>';
+        _todosLosUsuarios.forEach(u => {
+            select.innerHTML += `<option value="${u.id}">${u.nombre} (${u.whatsapp}) — ${u.puntos || 0} pts</option>`;
+        });
+        select.onchange = mostrarPreviewFusion;
+    } catch (err) {
+        select.innerHTML = '<option value="">Error al cargar usuarios</option>';
+    }
+};
+
+window.mostrarPreviewFusion = function() {
+    const dupId = document.getElementById('fusion-duplicado').value;
+    const preview = document.getElementById('fusion-preview');
+    if (!dupId) { preview.style.display = 'none'; return; }
+
+    const dup = _todosLosUsuarios.find(u => u.id === dupId);
+    const principalNombre = document.getElementById('edit-nombre').value;
+    const principalPts = 0; // se muestra después
+
+    if (dup) {
+        preview.style.display = 'block';
+        preview.innerHTML = `
+            ✅ <strong>${principalNombre}</strong> va a absorber a <strong>${dup.nombre}</strong>.<br>
+            Sus predicciones de esta fecha se van a transferir al principal.<br>
+            Los puntos del duplicado (${dup.puntos || 0} pts) se sumarán si el principal tiene menos.<br>
+            El duplicado será eliminado.
+        `;
+    }
+};
+
+window.guardarEdicionUsuario = async function() {
+    const userId = document.getElementById('edit-user-id').value;
+    const nuevoNombre = document.getElementById('edit-nombre').value.trim();
+    const nuevoWhatsapp = document.getElementById('edit-whatsapp').value.trim();
+
+    if (!nuevoNombre || !nuevoWhatsapp) {
+        alert('Completá nombre y WhatsApp.');
+        return;
+    }
+
+    try {
+        // Verificar que el nuevo WhatsApp no esté en uso por otro usuario
+        const existente = await queryTorneo('usuarios').where('whatsapp', '==', nuevoWhatsapp).get();
+        const conflicto = existente.docs.find(d => d.id !== userId);
+        if (conflicto) {
+            if (!confirm(`⚠️ El WhatsApp ${nuevoWhatsapp} ya pertenece a ${conflicto.data().nombre}.\n\n¿Querés fusionar ambos en lugar de editar? Cerrá este diálogo y usá el botón "Fusionar".`)) return;
+            return;
+        }
+
+        await db.collection('usuarios').doc(userId).update({
+            nombre: nuevoNombre,
+            whatsapp: nuevoWhatsapp,
+        });
+
+        cerrarModalUsuario();
+        await cargarUsuariosAdmin();
+        alert(`✅ Datos de ${nuevoNombre} actualizados correctamente.`);
+    } catch (err) {
+        console.error(err);
+        alert('Error al guardar. Intentá de nuevo.');
+    }
+};
+
+window.ejecutarFusion = async function() {
+    const principalId = document.getElementById('edit-user-id').value;
+    const dupId = document.getElementById('fusion-duplicado').value;
+    const dup = _todosLosUsuarios.find(u => u.id === dupId);
+    const principalNombre = document.getElementById('edit-nombre').value;
+
+    if (!dupId || !dup) { alert('Seleccioná el duplicado primero.'); return; }
+
+    if (!confirm(`¿Fusionar?\n\n✅ Principal: ${principalNombre}\n🗑️ Duplicado a eliminar: ${dup.nombre} (${dup.whatsapp})\n\nEsta acción no se puede deshacer.`)) return;
+
+    try {
+        // 1. Obtener predicciones del duplicado
+        const predsDup = await queryTorneo('predicciones').where('userId', '==', dupId).get();
+        // 2. Obtener predicciones actuales del principal para no duplicar por partido
+        const predsPrincipal = await queryTorneo('predicciones').where('userId', '==', principalId).get();
+        const partidosYaCargados = new Set();
+        predsPrincipal.forEach(d => partidosYaCargados.add(d.data().partidoId));
+
+        const batch = db.batch();
+
+        // 3. Transferir predicciones del duplicado que no existan en el principal
+        predsDup.forEach(d => {
+            const pred = d.data();
+            if (!partidosYaCargados.has(pred.partidoId)) {
+                // Crear nueva predicción con userId del principal
+                const nuevaRef = db.collection('predicciones').doc();
+                batch.set(nuevaRef, { ...pred, userId: principalId });
+            }
+            // Borrar la del duplicado
+            batch.delete(d.ref);
+        });
+
+        // 4. Obtener datos actuales del principal para comparar puntos
+        const principalDoc = await db.collection('usuarios').doc(principalId).get();
+        const principalData = principalDoc.data();
+        const puntosFinales = Math.max(principalData.puntos || 0, dup.puntos || 0);
+        const historicosFinales = Math.max(principalData.puntosHistoricos || 0, dup.puntosHistoricos || 0);
+
+        // 5. Actualizar principal con el mejor dato de pago y puntos
+        batch.update(db.collection('usuarios').doc(principalId), {
+            puntos: puntosFinales,
+            puntosHistoricos: historicosFinales,
+            pagoConfirmado: principalData.pagoConfirmado || dup.pagoConfirmado || false,
+        });
+
+        // 6. Borrar duplicado
+        batch.delete(db.collection('usuarios').doc(dupId));
+
+        await batch.commit();
+
+        cerrarModalUsuario();
+        await cargarUsuariosAdmin();
+        alert(`✅ Fusión completada. ${dup.nombre} fue absorbido por ${principalNombre}.`);
+    } catch (err) {
+        console.error(err);
+        alert('Error al fusionar. Revisá la consola.');
+    }
+};
+
+// Cerrar modal al hacer click fuera
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('modal-usuario');
+    if (modal && e.target === modal) cerrarModalUsuario();
+});
+
+// ─── RESETEAR PREDICCIONES DE UN USUARIO ─────────────────────────────────────
+window.resetearPrediccionesUsuario = async function(userId, nombre) {
+    if (!confirm(`¿Borrar las predicciones de ${nombre} para esta fecha?\n\nVa a poder volver a cargarlas desde el sitio.`)) return;
+
+    try {
+        const preds = await queryTorneo('predicciones').where('userId', '==', userId).get();
+        if (preds.empty) {
+            alert(`${nombre} no tiene predicciones cargadas en esta fecha.`);
+            return;
+        }
+        const batch = db.batch();
+        preds.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        alert(`✅ Predicciones de ${nombre} eliminadas. Ya puede volver a cargar sus pronósticos.`);
+    } catch (err) {
+        console.error(err);
+        alert('Error al eliminar las predicciones. Intentá de nuevo.');
+    }
+};
+
+window.filtrarUsuarios = function() {
+    const texto = (document.getElementById('filtro-usuario')?.value || '').toLowerCase();
+    const filtroPago = document.getElementById('filtro-pago')?.value || 'todos';
+    const filas = document.querySelectorAll('#usuarios-tbody tr[data-nombre]');
+    let visibles = 0;
+
+    filas.forEach(fila => {
+        const nombre = (fila.dataset.nombre || '').toLowerCase();
+        const pago = fila.dataset.pago;
+        const aviso = fila.dataset.aviso;
+
+        const coincideTexto = !texto || nombre.includes(texto);
+        const coincidePago =
+            filtroPago === 'todos' ||
+            (filtroPago === 'pagados' && pago === 'true') ||
+            (filtroPago === 'sin-pago' && pago === 'false') ||
+            (filtroPago === 'avisaron' && aviso === 'true');
+
+        const mostrar = coincideTexto && coincidePago;
+        fila.style.display = mostrar ? '' : 'none';
+        if (mostrar) visibles++;
+    });
+
+    const contador = document.getElementById('filtro-contador');
+    if (contador) contador.textContent = `Mostrando ${visibles} de ${filas.length} participantes`;
+};
 
 window.togglePago = async function(userId, isChecked) {
     try {
@@ -1148,7 +1383,7 @@ async function _calcularPuntosInterno() {
 
     // 3.5 Obtener config de gol
     let jugadorGolHizo = null;
-    const configDoc = await db.collection('config').doc(configDocId('general')).get();
+    const configDoc = await db.collection('config').doc(configDocId('gol')).get();
     if (configDoc.exists) {
         const val = configDoc.data().hizoGol;
         if (val === 'si') jugadorGolHizo = true;
@@ -1223,7 +1458,7 @@ async function calcularPuntos() {
         // Verificar si ya fue calculado y confirmar recálculo
         const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
         if (estadoDoc.exists && estadoDoc.data().fechaCalculada === true) {
-            const recalcular = confirm("⚠️ Los puntos ya fueron calculados para esta fecha.\n\n¿Querés RECALCULAR de todas formas?\n\nLos puntos de todos los usuarios se resetearán a 0 y se recalcularán desde cero.");
+            const recalcular = confirm("⚠️ Los puntos ya fueron calculados para esta fecha.\n\n¿Querés RECALCULAR de todas formas?\n\nSe volverán a calcular los puntos de esta fecha y se sumarán a los históricos de cada jugador.");
             if (!recalcular) return;
         }
 
@@ -1242,10 +1477,10 @@ async function calcularPuntos() {
 
 async function cargarConfigGolAdmin() {
     try {
-        const doc = await db.collection('config').doc(configDocId('general')).get();
+        const doc = await db.collection('config').doc(configDocId('gol')).get();
         if (doc.exists) {
             const data = doc.data();
-            if (data.jugadorGol) document.getElementById('config-jugador').value = data.jugadorGol;
+            if (data.jugador) document.getElementById('config-jugador').value = data.jugador;
             if (data.hizoGol) document.getElementById('config-hizo-gol').value = data.hizoGol;
             if (data.cerrado) document.getElementById('config-cerrado').checked = true;
         }
@@ -1259,8 +1494,8 @@ async function guardarConfigGol(e) {
     const cerrado = document.getElementById('config-cerrado').checked;
 
     try {
-        await db.collection('config').doc(configDocId('general')).set({
-            jugadorGol: jugador,
+        await db.collection('config').doc(configDocId('gol')).set({
+            jugador: jugador,
             hizoGol: hizoGol,
             cerrado: cerrado
         }, { merge: true });
@@ -1287,13 +1522,14 @@ window.avanzarFecha = async function() {
     if (btn) { btn.disabled = true; btn.textContent = 'Avanzando...'; }
 
     try {
-        // Traer partidos y predicciones (NO usuarios)
-        const [partidosSnap, prediccionesSnap] = await Promise.all([
+        // Traer partidos, predicciones Y resultados (NO usuarios)
+        const [partidosSnap, prediccionesSnap, resultadosSnap] = await Promise.all([
             queryTorneo('partidos').get(),
             queryTorneo('predicciones').get(),
+            queryTorneo('resultados').get(),
         ]);
 
-        const docsABorrar = [...partidosSnap.docs, ...prediccionesSnap.docs];
+        const docsABorrar = [...partidosSnap.docs, ...prediccionesSnap.docs, ...resultadosSnap.docs];
 
         // Borrar en batches de 490
         const batches = [];
@@ -1379,6 +1615,99 @@ window.avanzarFecha = async function() {
 };
 
 // ─── VENTANA DE CARGA MANUAL ──────────────────────────────────────────────────
+// ─── RANKING DE ESTA FECHA ────────────────────────────────────────────────────
+window.fijarPuntosHistoricos = async function() {
+    if (!confirm(
+        '📌 ¿Fijar puntos actuales como históricos?\n\n' +
+        'Esto toma los puntos que tiene cada jugador AHORA y los guarda como base histórica.\n' +
+        'El próximo cálculo va a sumar los puntos de la fecha actual a esa base.\n\n' +
+        'Usá esto solo si olvidaste presionar "Avanzar Fecha" antes de cargar la nueva fecha.\n\n' +
+        '¿Confirmás?'
+    )) return;
+
+    try {
+        const snap = await queryTorneo('usuarios').get();
+        const batch = db.batch();
+        snap.forEach(doc => {
+            const puntos = doc.data().puntos || 0;
+            batch.update(doc.ref, {
+                puntosHistoricos: puntos,
+                puntosEsteFecha: 0,
+            });
+        });
+        await batch.commit();
+        alert('✅ Puntos históricos actualizados. Ahora podés calcular los puntos de esta fecha y se van a sumar correctamente.');
+    } catch (err) {
+        console.error(err);
+        alert('Error al fijar los históricos. Revisá la consola.');
+    }
+};
+
+window.toggleRankingFecha = async function() {
+    const container = document.getElementById('ranking-fecha-container');
+    const btn = document.getElementById('btn-ranking-fecha');
+    if (!container) return;
+
+    if (container.style.display !== 'none') {
+        container.style.display = 'none';
+        btn.textContent = '🏆 Ver Tabla de Esta Fecha';
+        return;
+    }
+
+    btn.textContent = 'Cargando...';
+    container.style.display = 'block';
+    container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Cargando...</p>';
+
+    try {
+        const snap = await queryTorneo('usuarios').get();
+        let usuarios = [];
+        snap.forEach(d => {
+            const u = d.data();
+            const ptsFecha = u.puntosEsteFecha || 0;
+            if (u.pagoConfirmado || (u.puntos || 0) > 0) {
+                usuarios.push({ nombre: u.nombre, ptsFecha, puntos: u.puntos || 0 });
+            }
+        });
+
+        usuarios.sort((a, b) => b.ptsFecha - a.ptsFecha);
+
+        if (usuarios.length === 0) {
+            container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Sin datos aún. Calculá los puntos primero.</p>';
+            btn.textContent = '🏆 Ver Tabla de Esta Fecha';
+            return;
+        }
+
+        const medallas = ['🥇','🥈','🥉'];
+        let html = '<table style="width:100%; border-collapse:collapse; font-size:0.85rem; margin-top:0.5rem;">';
+        html += '<thead><tr style="border-bottom:1px solid var(--card-border); color:var(--text-muted);">';
+        html += '<th style="text-align:left; padding:5px 4px;">#</th>';
+        html += '<th style="text-align:left; padding:5px 4px;">Nombre</th>';
+        html += '<th style="text-align:right; padding:5px 4px;">Esta fecha</th>';
+        html += '<th style="text-align:right; padding:5px 4px;">Total</th>';
+        html += '</tr></thead><tbody>';
+
+        usuarios.forEach((u, i) => {
+            const pos = medallas[i] || `${i + 1}`;
+            const esLider = i === 0;
+            html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${esLider ? 'background:rgba(251,191,36,0.07);' : ''}">
+                <td style="padding:6px 4px;">${pos}</td>
+                <td style="padding:6px 4px; font-weight:${esLider ? '700' : '400'};">${u.nombre}</td>
+                <td style="padding:6px 4px; text-align:right; font-weight:700; color:var(--primary);">${u.ptsFecha} pts</td>
+                <td style="padding:6px 4px; text-align:right; color:var(--text-muted);">${u.puntos}</td>
+            </tr>`;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        btn.textContent = '🏆 Ocultar Tabla de Esta Fecha';
+
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = '<p style="color:var(--danger); font-size:0.85rem;">Error al cargar.</p>';
+        btn.textContent = '🏆 Ver Tabla de Esta Fecha';
+    }
+};
+
 function actualizarBtnOverride(activo) {
     const btn = document.getElementById('btn-override-horario');
     if (!btn) return;
@@ -1428,24 +1757,37 @@ async function cargarPronosticosAdmin() {
     div.innerHTML = '<p>Cargando...</p>';
 
     try {
-        const [partSnap, resSnap, predSnap, userSnap] = await Promise.all([
+        const [partSnap, resSnap, predSnap, userSnap, golSnap] = await Promise.all([
             queryTorneo('partidos').get(),
             queryTorneo('resultados').get(),
             queryTorneo('predicciones').get(),
             queryTorneo('usuarios').get(),
+            db.collection('config').doc(configDocId('gol')).get(),
         ]);
 
         const resultadoReal = {};
         resSnap.forEach(d => { resultadoReal[d.data().partidoId] = d.data().resultado; });
 
-        const nombreUsuario = {};
-        userSnap.forEach(d => { nombreUsuario[d.id] = d.data().nombre; });
+        const usuarios = {};
+        userSnap.forEach(d => { usuarios[d.id] = d.data(); });
 
         const predPorPartido = {};
         predSnap.forEach(d => {
             const p = d.data();
             if (!predPorPartido[p.partidoId]) predPorPartido[p.partidoId] = [];
             predPorPartido[p.partidoId].push(p);
+        });
+
+        // Gol de la fecha
+        const golConfig = golSnap.exists ? golSnap.data() : {};
+        const jugadorNombre = golConfig.jugador || '—';
+        const hizoGol = golConfig.hizoGol || 'pendiente';
+        const golSi = [], golNo = [], golSinVoto = [];
+        userSnap.forEach(d => {
+            const u = d.data();
+            if (u.prediccionGol === true) golSi.push(u.nombre);
+            else if (u.prediccionGol === false) golNo.push(u.nombre);
+            else if (u.pagoConfirmado === true) golSinVoto.push(u.nombre);
         });
 
         let partidos = [];
@@ -1463,8 +1805,8 @@ async function cargarPronosticosAdmin() {
         }
 
         const etiqueta = { local: 'Local', empate: 'Empate', visitante: 'Visitante' };
-
         let html = '';
+
         partidos.forEach(p => {
             const res = resultadoReal[p.id];
             const preds = predPorPartido[p.id] || [];
@@ -1472,22 +1814,27 @@ async function cargarPronosticosAdmin() {
             const pts = esDoble ? 6 : 3;
             const resLabel = res
                 ? `<strong style="color:var(--primary)">${etiqueta[res]}</strong> <span style="font-size:0.75rem; color:var(--text-muted)">(${pts} pts)</span>`
-                : '<span style="color:var(--text-muted)">Sin resultado</span>';
+                : '<span style="color:var(--text-muted)">Sin resultado aún</span>';
 
             const votos = { local: [], empate: [], visitante: [] };
             preds.forEach(pr => {
-                const nombre = nombreUsuario[pr.userId] || 'Desconocido';
+                const nombre = usuarios[pr.userId]?.nombre || 'Desconocido';
                 if (votos[pr.resultado]) votos[pr.resultado].push(nombre);
             });
+
+            const apostaron = new Set(preds.map(pr => pr.userId));
+            const noApostaron = Object.entries(usuarios)
+                .filter(([id, u]) => !apostaron.has(id) && u.pagoConfirmado === true)
+                .map(([, u]) => u.nombre);
 
             html += `
                 <div style="border:1px solid var(--card-border); border-radius:10px; padding:1rem; margin-bottom:1rem;">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:0.75rem;">
                         <div>
                             <span style="font-size:0.75rem; color:var(--text-muted);">J${p.jornada || '?'} · ${p.categoria || 'General'}</span>
-                            <div style="font-weight:700; font-size:0.95rem;">${p.local} <span style="color:var(--text-muted)">vs</span> ${p.visitante}${esDoble ? ' <span style="color:#ef4444; font-size:0.75rem;">🔥 x2</span>' : ''}</div>
+                            <div style="font-weight:700; font-size:0.95rem;">${p.local} <span style="color:var(--text-muted)">vs</span> ${p.visitante}${esDoble ? ' <span style="color:#ef4444; font-size:0.75rem;">x2</span>' : ''}</div>
                         </div>
-                        <div style="text-align:right; font-size:0.85rem;">Resultado: ${resLabel}</div>
+                        <div style="font-size:0.85rem;">Resultado: ${resLabel}</div>
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; font-size:0.82rem;">
                         ${['local','empate','visitante'].map(op => {
@@ -1501,24 +1848,63 @@ async function cargarPronosticosAdmin() {
                                         ${etiqueta[op]} ${esGanador ? '✓' : ''} <span style="font-weight:400; color:var(--text-muted);">(${lista.length})</span>
                                     </div>
                                     ${lista.length === 0
-                                        ? '<div style="color:var(--text-muted); font-style:italic;">Nadie</div>'
+                                        ? '<div style="color:var(--text-muted); font-style:italic; font-size:0.78rem;">Nadie</div>'
                                         : lista.map(n => `<div style="padding:1px 0;">• ${n}</div>`).join('')
                                     }
                                 </div>
                             `;
                         }).join('')}
                     </div>
-                    ${preds.length === 0 ? '<p style="color:var(--text-muted); font-size:0.8rem; margin-top:0.5rem; margin-bottom:0;">Nadie apostó en este partido aún.</p>' : ''}
+                    ${noApostaron.length > 0 ? `<div style="margin-top:0.6rem; font-size:0.75rem; color:var(--text-muted);">Sin predicción: ${noApostaron.join(', ')}</div>` : ''}
                 </div>
             `;
         });
 
+        // GOL DE LA FECHA
+        const golColorSi = hizoGol === 'si' ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.04)';
+        const golBorderSi = hizoGol === 'si' ? '1px solid #22c55e' : '1px solid var(--card-border)';
+        const golColorNo = hizoGol === 'no' ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.04)';
+        const golBorderNo = hizoGol === 'no' ? '1px solid #22c55e' : '1px solid var(--card-border)';
+
+        html += `
+            <div style="border:1px solid var(--card-border); border-radius:10px; padding:1rem; margin-bottom:1rem; background:rgba(251,191,36,0.05);">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:0.75rem;">
+                    <div>
+                        <span style="font-size:0.75rem; color:var(--text-muted);">Gol de la Fecha</span>
+                        <div style="font-weight:700; font-size:0.95rem;">${jugadorNombre}</div>
+                    </div>
+                    <div style="font-size:0.85rem;">
+                        ${hizoGol === 'si' ? '<strong style="color:#22c55e">Anotó ✓</strong> <span style="font-size:0.75rem; color:var(--text-muted)">(1 pt)</span>'
+                        : hizoGol === 'no' ? '<strong style="color:#ef4444">No anotó</strong>'
+                        : '<span style="color:var(--text-muted)">Pendiente</span>'}
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:0.82rem;">
+                    <div style="background:${golColorSi}; border:${golBorderSi}; border-radius:8px; padding:0.5rem;">
+                        <div style="font-weight:700; margin-bottom:4px; color:${hizoGol === 'si' ? '#22c55e' : 'var(--text-main)'};">
+                            Sí anota ${hizoGol === 'si' ? '✓' : ''} <span style="font-weight:400; color:var(--text-muted);">(${golSi.length})</span>
+                        </div>
+                        ${golSi.length === 0 ? '<div style="color:var(--text-muted); font-style:italic; font-size:0.78rem;">Nadie</div>' : golSi.map(n => `<div style="padding:1px 0;">• ${n}</div>`).join('')}
+                    </div>
+                    <div style="background:${golColorNo}; border:${golBorderNo}; border-radius:8px; padding:0.5rem;">
+                        <div style="font-weight:700; margin-bottom:4px; color:${hizoGol === 'no' ? '#22c55e' : 'var(--text-main)'};">
+                            No anota ${hizoGol === 'no' ? '✓' : ''} <span style="font-weight:400; color:var(--text-muted);">(${golNo.length})</span>
+                        </div>
+                        ${golNo.length === 0 ? '<div style="color:var(--text-muted); font-style:italic; font-size:0.78rem;">Nadie</div>' : golNo.map(n => `<div style="padding:1px 0;">• ${n}</div>`).join('')}
+                    </div>
+                </div>
+                ${golSinVoto.length > 0 ? `<div style="margin-top:0.6rem; font-size:0.75rem; color:var(--text-muted);">Sin voto: ${golSinVoto.join(', ')}</div>` : ''}
+            </div>
+        `;
+
         div.innerHTML = html;
+
     } catch (err) {
         console.error('Error cargando pronósticos:', err);
         div.innerHTML = '<p>Error al cargar. Verificá tu conexión.</p>';
     }
 }
+
 
 // ─── HISTORIAL DE PARTICIPACIÓN POR FECHAS ────────────────────────────────────
 async function cargarHistorialParticipacion() {
