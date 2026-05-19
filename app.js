@@ -212,7 +212,7 @@ async function cargarPartidosUsuario() {
             const jB = b.jornada || 0;
             if (jA !== jB) return jA - jB;
             
-            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3 };
+            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3, "Liga Profesional": 4 };
             const catA = catOrder[a.categoria || "Primera"] || 99;
             const catB = catOrder[b.categoria || "Primera"] || 99;
             if (catA !== catB) return catA - catB;
@@ -380,12 +380,20 @@ async function enviarPredicciones() {
     }
 
     // 🔄 VALIDACIÓN DE USUARIO EXISTENTE POR WHATSAPP
-    // Si ya existe, lo reconocemos y reutilizamos su cuenta (nueva fecha)
+    // Buscamos en todos los usuarios (sin filtro de torneo) para evitar duplicados
+    // aunque el campo "torneo" no esté bien seteado en registros viejos
     let usuarioExistenteId = null;
     let usuarioExistentePuntos = 0;
     let usuarioExistentePago = false;
     try {
-        const existUser = await queryTorneo('usuarios').where('whatsapp', '==', whatsapp).get();
+        // Primero buscar con filtro de torneo (lo más común)
+        let existUser = await queryTorneo('usuarios').where('whatsapp', '==', whatsapp).get();
+
+        // Si no encuentra nada, buscar sin filtro de torneo (usuarios viejos sin campo torneo)
+        if (existUser.empty) {
+            existUser = await db.collection('usuarios').where('whatsapp', '==', whatsapp).get();
+        }
+
         if (!existUser.empty) {
             const docExistente = existUser.docs[0];
             const dataExistente = docExistente.data();
@@ -402,6 +410,11 @@ async function enviarPredicciones() {
             usuarioExistenteId = docExistente.id;
             usuarioExistentePuntos = dataExistente.puntos || 0;
             usuarioExistentePago = dataExistente.pagoConfirmado || false;
+
+            // Si el usuario no tiene torneo seteado, lo actualizamos
+            if (!dataExistente.torneo) {
+                await db.collection('usuarios').doc(docExistente.id).update({ torneo: torneoActual });
+            }
         }
     } catch(err) {
         console.error("Error al validar WhatsApp:", err);
@@ -772,7 +785,8 @@ async function initAdminApp() {
 async function guardarPartido(e) {
     e.preventDefault();
     const id = document.getElementById('partido-edit-id').value;
-    const jornada = parseInt(document.getElementById('partido-jornada').value);
+    const jornadaRaw = document.getElementById('partido-jornada').value.trim();
+    const jornada = isNaN(jornadaRaw) ? jornadaRaw : parseInt(jornadaRaw);
     const local = document.getElementById('partido-local').value;
     const visitante = document.getElementById('partido-visitante').value;
     const fecha = document.getElementById('partido-fecha').value;
@@ -829,7 +843,7 @@ window.editarPartido = function(id) {
     });
 
     document.getElementById('partido-edit-id').value = p.id;
-    document.getElementById('partido-jornada').value = p.jornada || 1;
+    document.getElementById('partido-jornada').value = p.jornada || '';
     document.getElementById('partido-fecha').value = p.fecha;
     document.getElementById('titulo-form-partido').innerText = 'Editar Partido';
     document.getElementById('btn-cancel-edit').style.display = 'inline-block';
@@ -886,7 +900,7 @@ async function cargarPartidosAdmin() {
             const jB = b.jornada || 0;
             if (jA !== jB) return jA - jB;
             
-            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3 };
+            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3, "Liga Profesional": 4 };
             const catA = catOrder[a.categoria || "Primera"] || 99;
             const catB = catOrder[b.categoria || "Primera"] || 99;
             if (catA !== catB) return catA - catB;
@@ -1259,11 +1273,18 @@ window.ejecutarFusion = async function() {
         const puntosFinales = Math.max(principalData.puntos || 0, dup.puntos || 0);
         const historicosFinales = Math.max(principalData.puntosHistoricos || 0, dup.puntosHistoricos || 0);
 
-        // 5. Actualizar principal con el mejor dato de pago y puntos
+        // 5. Actualizar principal con el mejor dato de pago, puntos y gol
+        const prediccionGolFinal = (principalData.prediccionGol !== null && principalData.prediccionGol !== undefined)
+            ? principalData.prediccionGol
+            : (dup.prediccionGol !== null && dup.prediccionGol !== undefined ? dup.prediccionGol : null);
+        const jugadorGolFinal = principalData.jugadorGol || dup.jugadorGol || '';
+
         batch.update(db.collection('usuarios').doc(principalId), {
             puntos: puntosFinales,
             puntosHistoricos: historicosFinales,
             pagoConfirmado: principalData.pagoConfirmado || dup.pagoConfirmado || false,
+            prediccionGol: prediccionGolFinal,
+            jugadorGol: jugadorGolFinal,
         });
 
         // 6. Borrar duplicado
@@ -1795,7 +1816,7 @@ async function cargarPronosticosAdmin() {
         partidos.sort((a, b) => {
             const jA = a.jornada || 0, jB = b.jornada || 0;
             if (jA !== jB) return jA - jB;
-            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3 };
+            const catOrder = { "Primera": 1, "Tercera": 2, "Senior": 3, "Liga Profesional": 4 };
             return (catOrder[a.categoria] || 99) - (catOrder[b.categoria] || 99);
         });
 
@@ -2133,6 +2154,69 @@ window.toggleCierreGlobal = async function() {
 }
 
 // ─── BUSCAR PREDICCIONES POR USUARIO ─────────────────────────────────────────
+// ─── DETECTAR USUARIOS DUPLICADOS ────────────────────────────────────────────
+window.detectarDuplicados = async function() {
+    const div = document.getElementById('duplicados-list');
+    div.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Buscando...</p>';
+
+    try {
+        // Buscar en TODOS los usuarios sin filtro de torneo para atrapar duplicados cross-torneo
+        const snap = await db.collection('usuarios').get();
+        
+        // Agrupar por WhatsApp
+        const porWhatsapp = {};
+        snap.forEach(d => {
+            const u = { id: d.id, ...d.data() };
+            const wa = u.whatsapp || 'sin-numero';
+            if (!porWhatsapp[wa]) porWhatsapp[wa] = [];
+            porWhatsapp[wa].push(u);
+        });
+
+        // Filtrar solo los que tienen más de uno
+        const duplicados = Object.entries(porWhatsapp)
+            .filter(([, lista]) => lista.length > 1)
+            .sort((a, b) => a[0].localeCompare(b[0]));
+
+        if (duplicados.length === 0) {
+            div.innerHTML = '<p style="color:#22c55e; font-size:0.88rem;">✅ No se encontraron duplicados.</p>';
+            return;
+        }
+
+        let html = `<p style="color:var(--danger); font-size:0.85rem; margin-bottom:0.75rem;">⚠️ Se encontraron <strong>${duplicados.length}</strong> WhatsApp con más de un registro:</p>`;
+
+        duplicados.forEach(([wa, lista]) => {
+            html += `
+                <div style="border:1px solid rgba(239,68,68,0.4); border-radius:10px; padding:1rem; margin-bottom:0.75rem; background:rgba(239,68,68,0.05);">
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">📱 ${wa} — ${lista.length} registros</div>
+                    ${lista.map(u => `
+                        <div style="display:flex; justify-content:space-between; align-items:center; 
+                             background:rgba(255,255,255,0.04); border:1px solid var(--card-border);
+                             border-radius:8px; padding:0.5rem 0.75rem; margin-bottom:6px; font-size:0.83rem;">
+                            <div>
+                                <strong>${u.nombre}</strong>
+                                <span style="color:var(--text-muted); margin-left:8px;">
+                                    ${u.puntos || 0} pts · ${u.pagoConfirmado ? '✅ Pagó' : '❌ Sin pago'} · torneo: ${u.torneo || 'pueblo'}
+                                </span>
+                            </div>
+                            <button onclick="abrirModalUsuario('${u.id}', '${u.nombre.replace(/'/g, "\\'")}', '${u.whatsapp}')"
+                                style="background:rgba(99,102,241,0.2); color:#818cf8; border:1px solid rgba(99,102,241,0.4); 
+                                       border-radius:6px; padding:4px 10px; font-size:0.78rem; cursor:pointer; white-space:nowrap;">
+                                🔀 Fusionar
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        });
+
+        div.innerHTML = html;
+
+    } catch (err) {
+        console.error(err);
+        div.innerHTML = '<p style="color:var(--danger);">Error al buscar duplicados.</p>';
+    }
+};
+
 window.buscarPrediccionesUsuario = async function() {
     const input = document.getElementById('buscar-usuario-input').value.trim().toLowerCase();
     const div = document.getElementById('buscar-usuario-resultados');

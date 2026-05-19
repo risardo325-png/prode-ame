@@ -14,7 +14,7 @@ const TORNEOS_CONFIG = {
     pueblo: {
         label: '⚽ Pueblo',
         nombre: 'Prode del Pueblo',
-        categorias: ['Primera', 'Tercera', 'Senior'],
+        categorias: ['Primera', 'Tercera', 'Senior', 'Liga Profesional'],
         mostrarCategorias: true,
         equiposPorCategoria: {
             Primera: [
@@ -55,6 +55,10 @@ const TORNEOS_CONFIG = {
                 "Jorge Newbery (Fortín Olavarría)",
                 "Atlético Rivadavia",
                 "Racing F.B.C. (Fortín Olavarría)"
+            ].sort(),
+            'Liga Profesional': [
+                "River Plate",
+                "Belgrano"
             ].sort()
         },
         pagos: { habilitado: true, montoPorFecha: 500, moneda: 'ARS' }

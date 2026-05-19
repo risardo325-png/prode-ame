@@ -42,11 +42,12 @@
                         <option value="Primera">Primera</option>
                         <option value="Tercera">Tercera</option>
                         <option value="Senior">Senior</option>
+                        <option value="Liga Profesional">Liga Profesional</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Jornada / Fecha (Nº):</label>
-                    <input type="number" id="partido-jornada" min="1" required>
+                    <label>Jornada / Fecha (Nº o nombre):</label>
+                    <input type="text" id="partido-jornada" placeholder="Ej: 3 o Final" required>
                 </div>
                 <div class="form-group">
                     <label>Local:</label>
@@ -212,6 +213,25 @@
                 Quién apostó a qué resultado y si acertó. Incluye el Gol de la Fecha.
             </p>
             <div id="pronosticos-list"><p>Cargando...</p></div>
+        </section>
+
+        <!-- DETECTAR DUPLICADOS -->
+        <section class="card mt-2">
+            <h2>⚠️ Usuarios Duplicados</h2>
+            <p class="subtitle" style="margin-bottom:1rem;">
+                Detecta participantes registrados más de una vez con el mismo WhatsApp.
+            </p>
+            <button onclick="detectarDuplicados()" class="btn-secondary w-100">🔍 Buscar Duplicados</button>
+            <div id="duplicados-list" style="margin-top:1rem;"></div>
+        </section>
+
+        <!-- HISTORIAL POR FECHAS -->
+        <section class="card mt-2">
+            <h2>📅 Historial por Fechas</h2>
+            <p class="subtitle" style="margin-bottom:1rem;">
+                Resultados de cada participante fecha por fecha.
+            </p>
+            <div id="historial-fechas-list"><p>Cargando...</p></div>
         </section>
 
         <!-- BUSCAR Y LIMPIAR PREDICCIONES DUPLICADAS -->
