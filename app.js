@@ -44,17 +44,21 @@ document.addEventListener('error', function (e) {
     const target = e.target;
     if (target.tagName && target.tagName.toLowerCase() === 'img') {
         const fallbackSrc = target.getAttribute('data-fallback');
-        const defaultImg = '/img/escudos/default.png';
         
         // Si hay un fallback guardado y no lo hemos probado aún, intentamos el nombre base
-        if (fallbackSrc && !target.src.includes(fallbackSrc) && !target.src.includes(defaultImg)) {
-            console.log(`Fallback 1 ejecutado para: ${target.alt} -> Intentando: ${fallbackSrc}`);
+        if (fallbackSrc && !target.src.includes(fallbackSrc) && !target.hasAttribute('data-fallback-attempted')) {
+            target.setAttribute('data-fallback-attempted', 'true');
             target.src = fallbackSrc;
         } 
-        // Si el fallback también falla, o no hay fallback, probamos el default
-        else if (!target.src.includes(defaultImg)) {
-            console.log(`Fallback 2 ejecutado para: ${target.alt} -> Intentando: ${defaultImg}`);
-            target.src = defaultImg;
+        // Si el fallback también falla, aplicamos un estilo robusto
+        else {
+            // Ocultar la imagen rota y usar CSS para mostrar un círculo genérico
+            target.style.display = 'none';
+            const container = target.parentElement;
+            if (container && container.classList.contains('escudo-container')) {
+                const altText = (target.alt || '?').charAt(0).toUpperCase();
+                container.innerHTML = `<span style="color: white; font-size: 1.5rem; font-family: var(--font-display); font-weight: 700;">${altText}</span>`;
+            }
         }
     }
 }, true); // Modo captura para interceptar antes
@@ -148,14 +152,14 @@ window.cambiarTorneo = function(torneo) {
         const seccionMundial = document.getElementById('seccion-mundial');
 
         if (torneo === 'mundial') {
-            // Mostrar sección "Próximamente"
             if (seccionPueblo) seccionPueblo.style.display = 'none';
             if (seccionMundial) {
                 seccionMundial.style.display = 'block';
                 seccionMundial.style.animation = 'fadeSlideUp 0.5s ease both';
             }
-            // Aplicar tema mundial al body
             document.body.classList.add('modo-mundial');
+            // Inicializar Mundial
+            if (typeof initMundialUsuario === 'function') initMundialUsuario();
         } else {
             // Mostrar sección Pueblo
             if (seccionMundial) seccionMundial.style.display = 'none';
@@ -193,11 +197,18 @@ async function initUserApp() {
 }
 
 async function cargarPartidosUsuario() {
+    console.log("[Firebase] Conectado");
+    console.log("[Partidos] Cargando...");
+    console.log("[Partidos] Colección: partidos");
+
     const listDiv = document.getElementById('partidos-list');
+    if (!listDiv) return;
     listDiv.innerHTML = '<p>Cargando partidos...</p>';
 
     try {
         const snapshot = await queryTorneo('partidos').get();
+        console.log("[Partidos] Encontrados:", snapshot.size);
+
         if (snapshot.empty) {
             listDiv.innerHTML = '<p>No hay partidos disponibles aún.</p>';
             return;
@@ -354,8 +365,13 @@ async function cargarPartidosUsuario() {
              // Si todos están cerrados, o para mantener simple, no deshabilitamos el botón, pero sí se envían los que se pueden.
         }
     } catch (error) {
-        console.error("Error cargando partidos:", error);
-        listDiv.innerHTML = '<p>Error al cargar. Verificá tu conexión.</p>';
+        console.error("[Firebase Error] Error cargando partidos:", error);
+        listDiv.innerHTML = `
+            <div style="text-align:center; padding: 2rem 1rem; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--card-border);">
+                <p style="color: var(--danger); font-size: 1.1rem; margin-bottom: 1rem;">No se pudieron cargar los partidos.</p>
+                <button onclick="cargarPartidosUsuario()" class="btn-primary" style="padding: 0.5rem 1rem;">🔄 Reintentar</button>
+            </div>
+        `;
     }
 }
 
@@ -1368,7 +1384,7 @@ window.togglePago = async function(userId, isChecked) {
 }
 
 // Función interna de cálculo de puntos (usada por btn y por cierre de fecha)
-async function _calcularPuntosInterno() {
+async function _calcularPuntosInterno(btn = null) {
     // 1. Obtener resultados reales
     const resSnapshot = await queryTorneo('resultados').get();
     const resultadosMap = {};
@@ -1414,8 +1430,15 @@ async function _calcularPuntosInterno() {
     // 4. RESETEAR todos los puntos a 0 primero (cálculo determinístico, sin acumulación)
     //    Luego calcular desde cero para cada usuario.
     const batch = db.batch();
+    const totalUsers = usersSnapshot.size;
+    let index = 0;
 
-    usersSnapshot.forEach(userDoc => {
+    for (const userDoc of usersSnapshot.docs) {
+        index++;
+        if (btn && index % 10 === 0) {
+            btn.textContent = `Calculando progreso... (${Math.round((index/totalUsers)*100)}%)`;
+            await new Promise(r => setTimeout(r, 0)); // Permitir render
+        }
         const userId = userDoc.id;
         const userData = userDoc.data();
         
@@ -1423,7 +1446,7 @@ async function _calcularPuntosInterno() {
         // Usuarios con puntos acumulados: se les calculan igualmente
         if (!userData.pagoConfirmado && (userData.puntos || 0) === 0) {
             batch.update(db.collection('usuarios').doc(userId), { puntos: 0 });
-            return;
+            continue;
         }
 
         // Partir SIEMPRE desde 0 — nunca sumar sobre valor previo
@@ -1453,7 +1476,9 @@ async function _calcularPuntosInterno() {
             puntos: (userData.puntosHistoricos || 0) + totalPuntos,
             puntosEsteFecha: totalPuntos
         });
-    });
+    }
+
+    if (btn) btn.textContent = "Guardando en Firebase... (Puede demorar)";
 
     await batch.commit();
 
@@ -1473,9 +1498,13 @@ async function calcularPuntos() {
     if (btn._calculando) return; // Evitar doble click / race condition
     btn._calculando = true;
     btn.disabled = true;
-    btn.textContent = "Calculando...";
+    btn.textContent = "Calculando progreso... (0%)";
 
     try {
+        // Validación de Admin
+        if (!firebase.auth().currentUser) {
+            throw new Error("No estás autenticado como admin.");
+        }
         // Verificar si ya fue calculado y confirmar recálculo
         const estadoDoc = await db.collection('config').doc(configDocId('estado')).get();
         if (estadoDoc.exists && estadoDoc.data().fechaCalculada === true) {
@@ -2344,3 +2373,472 @@ window.borrarPrediccion = async function(docId, userId) {
         alert('Error al borrar la predicción.');
     }
 };
+// ==========================================
+// ========== LÓGICA MUNDIAL 2026 ===========
+// ==========================================
+
+/**
+ * Renderiza el formulario de grupos del Mundial en #mundial-grupos-list.
+ * Cada grupo muestra los 4 equipos con bandera circular y selectores 1°/2°.
+ */
+function renderGruposMundial() {
+    const container = document.getElementById('mundial-grupos-list');
+    if (!container) return;
+
+    const grupos = getGruposMundial();
+    const letras = Object.keys(grupos);
+
+    let html = '';
+    letras.forEach(letra => {
+        const equipos = grupos[letra];
+        html += `
+            <div class="grupo-mundial" style="margin-bottom:1.5rem; padding:1rem; border:1px solid var(--card-border); border-radius:12px; background:rgba(255,255,255,0.03);">
+                <h3 style="margin:0 0 0.75rem; color:var(--primary); font-size:1rem; letter-spacing:1px;">GRUPO ${letra}</h3>
+                <div class="grupo-equipos" style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:0.75rem;">
+                    ${equipos.map(eq => `
+                        <div style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.6rem; background:rgba(255,255,255,0.04); border-radius:8px;">
+                            <img src="${getBanderaUrl(eq, 32)}" alt="${eq}"
+                                style="width:28px; height:20px; object-fit:cover; border-radius:3px; flex-shrink:0;"
+                                onerror="this.style.display='none'">
+                            <span style="font-size:0.82rem;">${eq}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:3px;">🥇 1° Clasificado</label>
+                        <select id="grupo-${letra}-1" data-grupo="${letra}" data-pos="1"
+                            style="width:100%; padding:0.5rem; border-radius:8px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white; font-size:0.85rem;">
+                            <option value="">— Elegí —</option>
+                            ${equipos.map(eq => `<option value="${eq}">${eq}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:3px;">🥈 2° Clasificado</label>
+                        <select id="grupo-${letra}-2" data-grupo="${letra}" data-pos="2"
+                            style="width:100%; padding:0.5rem; border-radius:8px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white; font-size:0.85rem;">
+                            <option value="">— Elegí —</option>
+                            ${equipos.map(eq => `<option value="${eq}">${eq}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+
+    // Validación: 1° y 2° del mismo grupo no pueden ser el mismo equipo
+    letras.forEach(letra => {
+        const s1 = document.getElementById(`grupo-${letra}-1`);
+        const s2 = document.getElementById(`grupo-${letra}-2`);
+        const validar = () => {
+            if (s1.value && s2.value && s1.value === s2.value) {
+                s2.style.borderColor = 'var(--danger)';
+            } else {
+                s2.style.borderColor = '';
+            }
+        };
+        s1.addEventListener('change', validar);
+        s2.addEventListener('change', validar);
+    });
+
+    // Botón confirmar
+    const btn = document.getElementById('btn-mundial-confirmar');
+    if (btn) {
+        btn.onclick = enviarPronosticosMundial;
+    }
+
+    // Cargar pronósticos previos si el usuario ya votó (por whatsapp en sessionStorage)
+    cargarPronosticosPreviosMundial();
+}
+
+/**
+ * Intenta pre-cargar pronósticos previos del usuario desde Firebase
+ * usando el whatsapp guardado en sessionStorage.
+ */
+async function cargarPronosticosPreviosMundial() {
+    const wa = sessionStorage.getItem('mundial_whatsapp');
+    if (!wa) return;
+    try {
+        const snap = await db.collection('pronosticos_grupos')
+            .where('torneo', '==', 'mundial')
+            .where('whatsapp', '==', wa)
+            .limit(1).get();
+        if (snap.empty) return;
+        const data = snap.docs[0].data();
+        const pronosticos = data.grupos || {};
+        Object.entries(pronosticos).forEach(([letra, preds]) => {
+            const s1 = document.getElementById(`grupo-${letra}-1`);
+            const s2 = document.getElementById(`grupo-${letra}-2`);
+            if (s1 && preds.primero) s1.value = preds.primero;
+            if (s2 && preds.segundo) s2.value = preds.segundo;
+        });
+        // Pre-llenar nombre
+        const nombreInput = document.getElementById('mundial-nombre');
+        const waInput = document.getElementById('mundial-whatsapp');
+        if (nombreInput && data.nombre) nombreInput.value = data.nombre;
+        if (waInput) waInput.value = wa;
+    } catch(e) { console.error('Error cargando pronósticos previos:', e); }
+}
+
+/**
+ * Valida y guarda los pronósticos de grupos en Firebase.
+ */
+async function enviarPronosticosMundial() {
+    const nombre = document.getElementById('mundial-nombre').value.trim();
+    const whatsapp = document.getElementById('mundial-whatsapp').value.trim();
+
+    if (!nombre || !whatsapp) {
+        alert('Completá tu nombre y WhatsApp antes de confirmar.');
+        return;
+    }
+
+    const grupos = getGruposMundial();
+    const letras = Object.keys(grupos);
+    const pronosticos = {};
+    let incompletos = [];
+    let mismosEquipos = [];
+
+    letras.forEach(letra => {
+        const s1 = document.getElementById(`grupo-${letra}-1`);
+        const s2 = document.getElementById(`grupo-${letra}-2`);
+        const primero = s1 ? s1.value : '';
+        const segundo = s2 ? s2.value : '';
+
+        if (!primero || !segundo) {
+            incompletos.push(`Grupo ${letra}`);
+        } else if (primero === segundo) {
+            mismosEquipos.push(`Grupo ${letra}`);
+        } else {
+            pronosticos[letra] = { primero, segundo };
+        }
+    });
+
+    if (incompletos.length > 0) {
+        alert(`Completá el 1° y 2° de: ${incompletos.join(', ')}`);
+        return;
+    }
+    if (mismosEquipos.length > 0) {
+        alert(`El 1° y 2° no pueden ser el mismo equipo en: ${mismosEquipos.join(', ')}`);
+        return;
+    }
+
+    const btn = document.getElementById('btn-mundial-confirmar');
+    if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+
+    try {
+        // Buscar si ya existe un pronóstico de este usuario
+        const snap = await db.collection('pronosticos_grupos')
+            .where('torneo', '==', 'mundial')
+            .where('whatsapp', '==', whatsapp)
+            .limit(1).get();
+
+        const payload = {
+            nombre, whatsapp,
+            torneo: 'mundial',
+            grupos: pronosticos,
+            fechaActualizacion: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+
+        if (!snap.empty) {
+            await db.collection('pronosticos_grupos').doc(snap.docs[0].id).set(payload, { merge: true });
+        } else {
+            payload.fechaRegistro = firebase.firestore.FieldValue.serverTimestamp();
+            payload.puntos = 0;
+            await db.collection('pronosticos_grupos').add(payload);
+        }
+
+        // Guardar whatsapp en session para pre-cargar próxima vez
+        sessionStorage.setItem('mundial_whatsapp', whatsapp);
+
+        alert('✅ ¡Pronósticos del Mundial guardados! Podés volver a cambiarlos antes del inicio.');
+    } catch(err) {
+        console.error('Error guardando pronósticos Mundial:', err);
+        alert('Error al guardar. Intentá de nuevo.');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🌍 Confirmar Pronósticos'; }
+    }
+}
+
+/**
+ * Carga y muestra el ranking del Mundial desde pronosticos_grupos.
+ */
+async function cargarRankingMundial() {
+    const div = document.getElementById('mundial-ranking-list');
+    if (!div) return;
+    try {
+        const snap = await db.collection('pronosticos_grupos')
+            .where('torneo', '==', 'mundial')
+            .orderBy('puntos', 'desc')
+            .get();
+
+        if (snap.empty) {
+            div.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:1rem;">Aún no hay participantes.</p>';
+            return;
+        }
+
+        let users = [];
+        snap.forEach(d => users.push(d.data()));
+        users.sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
+
+        let html = '';
+        users.forEach((u, i) => {
+            const pos = i + 1;
+            const posEmoji = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : pos;
+            const topClass = pos <= 3 ? `ranking-top${pos}` : '';
+            html += `
+                <div class="ranking-item ${topClass}">
+                    <div class="ranking-pos">${posEmoji}</div>
+                    <div class="ranking-name">${u.nombre}</div>
+                    <div class="ranking-pts">
+                        <span class="pts-number">${u.puntos || 0}</span>
+                        <span class="pts-exactos">pts</span>
+                    </div>
+                </div>
+            `;
+        });
+        div.innerHTML = html;
+    } catch(err) {
+        console.error('Error ranking mundial:', err);
+        // Si falla por índice faltante, intentar sin orderBy
+        try {
+            const snap2 = await db.collection('pronosticos_grupos').where('torneo', '==', 'mundial').get();
+            let users = [];
+            snap2.forEach(d => users.push(d.data()));
+            users.sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
+            if (users.length === 0) { div.innerHTML = '<p>Aún no hay participantes.</p>'; return; }
+            let html = '';
+            users.forEach((u, i) => {
+                const pos = i + 1;
+                const posEmoji = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : pos;
+                html += `<div class="ranking-item"><div class="ranking-pos">${posEmoji}</div><div class="ranking-name">${u.nombre}</div><div class="ranking-pts"><span class="pts-number">${u.puntos || 0}</span><span class="pts-exactos">pts</span></div></div>`;
+            });
+            div.innerHTML = html;
+        } catch(e2) {
+            div.innerHTML = '<p>Error al cargar ranking.</p>';
+        }
+    }
+}
+
+// ==========================================
+// ===== ADMIN — MUNDIAL 2026 GRUPOS ========
+// ==========================================
+
+/**
+ * Renderiza en el admin el formulario para cargar quién salió 1° y 2° de cada grupo.
+ * Se llama automáticamente al cargar el admin (desde initAdminApp).
+ */
+function renderAdminGruposMundial() {
+    const container = document.getElementById('admin-mundial-grupos');
+    if (!container) return;
+
+    const grupos = getGruposMundial();
+    const letras = Object.keys(grupos);
+
+    let html = '';
+    letras.forEach(letra => {
+        const equipos = grupos[letra];
+        html += `
+            <div style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--card-border); border-radius:10px;">
+                <div style="font-weight:700; color:var(--primary); margin-bottom:0.5rem; font-size:0.9rem;">GRUPO ${letra}</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:3px;">🥇 1° Real</label>
+                        <select id="admin-grupo-${letra}-1"
+                            style="width:100%; padding:0.45rem; border-radius:7px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white; font-size:0.82rem;">
+                            <option value="">— Sin definir —</option>
+                            ${equipos.map(eq => `<option value="${eq}">${eq}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:3px;">🥈 2° Real</label>
+                        <select id="admin-grupo-${letra}-2"
+                            style="width:100%; padding:0.45rem; border-radius:7px; border:1px solid var(--card-border); background:rgba(0,0,0,0.3); color:white; font-size:0.82rem;">
+                            <option value="">— Sin definir —</option>
+                            ${equipos.map(eq => `<option value="${eq}">${eq}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+
+    // Cargar resultados ya guardados
+    cargarResultadosGruposAdmin();
+}
+
+/**
+ * Carga desde Firebase los resultados de grupos ya guardados y los pre-selecciona.
+ */
+async function cargarResultadosGruposAdmin() {
+    try {
+        const doc = await db.collection('config').doc('resultados_grupos_mundial').get();
+        if (!doc.exists) return;
+        const data = doc.data();
+        const grupos = getGruposMundial();
+        Object.keys(grupos).forEach(letra => {
+            const r = data[letra];
+            if (!r) return;
+            const s1 = document.getElementById(`admin-grupo-${letra}-1`);
+            const s2 = document.getElementById(`admin-grupo-${letra}-2`);
+            if (s1 && r.primero) s1.value = r.primero;
+            if (s2 && r.segundo) s2.value = r.segundo;
+        });
+    } catch(e) { console.error('Error cargando resultados grupos:', e); }
+}
+
+/**
+ * Guarda los resultados reales de grupos y recalcula puntos de todos los participantes.
+ */
+window.guardarResultadosGruposMundial = async function() {
+    const grupos = getGruposMundial();
+    const letras = Object.keys(grupos);
+    const resultados = {};
+    let incompletos = [];
+
+    letras.forEach(letra => {
+        const s1 = document.getElementById(`admin-grupo-${letra}-1`);
+        const s2 = document.getElementById(`admin-grupo-${letra}-2`);
+        const primero = s1 ? s1.value : '';
+        const segundo = s2 ? s2.value : '';
+        if (primero && segundo) {
+            resultados[letra] = { primero, segundo };
+        } else if (primero || segundo) {
+            incompletos.push(`Grupo ${letra} (falta el ${!primero ? '1°' : '2°'})`);
+        }
+        // Grupos sin nada se ignoran (no están definidos aún)
+    });
+
+    if (incompletos.length > 0) {
+        const ok = confirm(`Algunos grupos están incompletos:\n${incompletos.join('\n')}\n\n¿Guardar solo los completos y calcular puntos?`);
+        if (!ok) return;
+    }
+
+    if (Object.keys(resultados).length === 0) {
+        alert('No hay resultados completos para guardar.');
+        return;
+    }
+
+    try {
+        // 1. Guardar resultados en config
+        await db.collection('config').doc('resultados_grupos_mundial').set(resultados, { merge: true });
+
+        // 2. Calcular puntos para todos los participantes
+        const snap = await db.collection('pronosticos_grupos').where('torneo', '==', 'mundial').get();
+        if (snap.empty) {
+            alert('✅ Resultados guardados. No hay participantes con pronósticos aún.');
+            return;
+        }
+
+        const batch = db.batch();
+        let actualizados = 0;
+
+        snap.forEach(docSnap => {
+            const data = docSnap.data();
+            const pronosticos = data.grupos || {};
+            let puntos = 0;
+
+            Object.entries(pronosticos).forEach(([letra, pred]) => {
+                const real = resultados[letra];
+                if (!real) return; // Grupo sin resultado aún
+
+                // Acertó clasificación 1° (pero no posición exacta)
+                if (pred.primero === real.primero) {
+                    puntos += 4; // posición exacta
+                } else if (pred.primero === real.segundo) {
+                    puntos += 1; // clasificó pero posición incorrecta
+                }
+
+                // Acertó clasificación 2°
+                if (pred.segundo === real.segundo) {
+                    puntos += 4; // posición exacta
+                } else if (pred.segundo === real.primero) {
+                    puntos += 1; // clasificó pero posición incorrecta
+                }
+            });
+
+            batch.update(docSnap.ref, { puntos });
+            actualizados++;
+        });
+
+        await batch.commit();
+        alert(`✅ Resultados guardados y puntos calculados para ${actualizados} participante(s).`);
+    } catch(err) {
+        console.error('Error guardando resultados grupos:', err);
+        alert('Error al guardar. Revisá la consola.');
+    }
+};
+
+/**
+ * Muestra en el admin todos los pronósticos de grupos de los participantes.
+ */
+window.verPronosticosMundialAdmin = async function() {
+    const div = document.getElementById('admin-mundial-pronosticos');
+    div.innerHTML = '<p>Cargando...</p>';
+
+    try {
+        const [snapPron, snapRes] = await Promise.all([
+            db.collection('pronosticos_grupos').where('torneo', '==', 'mundial').get(),
+            db.collection('config').doc('resultados_grupos_mundial').get(),
+        ]);
+
+        const resultados = snapRes.exists ? snapRes.data() : {};
+
+        if (snapPron.empty) {
+            div.innerHTML = '<p style="color:var(--text-muted);">Nadie cargó pronósticos todavía.</p>';
+            return;
+        }
+
+        let users = [];
+        snapPron.forEach(d => users.push({ id: d.id, ...d.data() }));
+        users.sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
+
+        let html = `<p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:0.75rem;">${users.length} participante(s) con pronósticos cargados.</p>`;
+
+        users.forEach(u => {
+            const pronosticos = u.grupos || {};
+            const letras = Object.keys(pronosticos).sort();
+
+            html += `
+                <div style="border:1px solid var(--card-border); border-radius:10px; padding:0.75rem; margin-bottom:0.75rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <strong style="font-size:0.9rem;">👤 ${u.nombre}</strong>
+                        <span style="background:rgba(99,102,241,0.2); color:#818cf8; padding:2px 10px; border-radius:10px; font-size:0.8rem; font-weight:600;">${u.puntos || 0} pts</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:5px;">
+                        ${letras.map(letra => {
+                            const pred = pronosticos[letra];
+                            const real = resultados[letra];
+                            const ok1 = real && pred.primero === real.primero ? '✅' : real && pred.primero === real.segundo ? '〽️' : real ? '❌' : '';
+                            const ok2 = real && pred.segundo === real.segundo ? '✅' : real && pred.segundo === real.primero ? '〽️' : real ? '❌' : '';
+                            return `
+                                <div style="background:rgba(255,255,255,0.03); border:1px solid var(--card-border); border-radius:7px; padding:5px 8px; font-size:0.75rem;">
+                                    <div style="font-weight:700; color:var(--primary); margin-bottom:3px;">Grupo ${letra}</div>
+                                    <div>${ok1 || '⏳'} 1°: ${pred.primero}</div>
+                                    <div>${ok2 || '⏳'} 2°: ${pred.segundo}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        div.innerHTML = html;
+    } catch(err) {
+        console.error('Error cargando pronósticos mundial admin:', err);
+        div.innerHTML = '<p style="color:var(--danger);">Error al cargar. Revisá la consola.</p>';
+    }
+};
+
+// Hook para inicializar el admin mundial al cargar
+const _initAdminOriginal = window.initAdminApp;
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('admin-main')) {
+        // Renderizar grupos mundial en el admin
+        renderAdminGruposMundial();
+    }
+});

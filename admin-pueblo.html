@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Prode Pueblo</title>
+  <link rel="stylesheet" href="admin-pueblo.css">
+</head>
+<body class="admin-pueblo-body">
+  <div id="admin-pueblo-login" class="admin-pueblo-login">
+    <form class="admin-pueblo-login-card" id="admin-pueblo-login-form">
+      <p class="admin-pueblo-kicker">Panel seguro</p>
+      <h1>Admin Prode Pueblo</h1>
+      <label>Email</label>
+      <input id="admin-pueblo-email" class="admin-pueblo-input" type="email" autocomplete="email" required>
+      <label>Clave</label>
+      <input id="admin-pueblo-password" class="admin-pueblo-input" type="password" autocomplete="current-password" required>
+      <button class="admin-pueblo-btn admin-pueblo-btn-primary" id="admin-pueblo-login-btn" type="submit">Ingresar</button>
+      <p id="admin-pueblo-login-error" class="admin-pueblo-error" hidden></p>
+      <a href="index.html" class="admin-pueblo-link">Volver al sitio</a>
+    </form>
+  </div>
+
+  <div id="admin-pueblo-app" class="admin-pueblo-app" hidden>
+    <aside class="admin-pueblo-sidebar" id="admin-pueblo-sidebar">
+      <div class="admin-pueblo-brand">
+        <span class="admin-pueblo-brand-mark">PP</span>
+        <div>
+          <strong>Prode Pueblo</strong>
+          <small>Administracion</small>
+        </div>
+      </div>
+      <nav class="admin-pueblo-nav">
+        <button class="admin-pueblo-nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="admin-pueblo-nav-btn" data-view="partidos">Fechas y resultados</button>
+        <button class="admin-pueblo-nav-btn" data-view="usuarios">Usuarios</button>
+        <button class="admin-pueblo-nav-btn" data-view="predicciones">Predicciones</button>
+        <button class="admin-pueblo-nav-btn" data-view="ranking">Ranking</button>
+        <button class="admin-pueblo-nav-btn" data-view="config">Configuracion</button>
+      </nav>
+      <div class="admin-pueblo-sidebar-actions">
+        <a href="admin-mundial.html" class="admin-pueblo-secondary-link">Admin Mundial</a>
+        <a href="index.html" class="admin-pueblo-secondary-link">Web publica</a>
+        <button class="admin-pueblo-btn admin-pueblo-btn-ghost" id="admin-pueblo-logout">Salir</button>
+      </div>
+    </aside>
+
+    <main class="admin-pueblo-main">
+      <header class="admin-pueblo-topbar">
+        <button class="admin-pueblo-icon-btn" id="admin-pueblo-menu" aria-label="Abrir menu">☰</button>
+        <div>
+          <p class="admin-pueblo-kicker">Liga local</p>
+          <h1 id="admin-pueblo-title">Dashboard</h1>
+        </div>
+        <div class="admin-pueblo-status" id="admin-pueblo-status">Conectando...</div>
+      </header>
+
+      <section class="admin-pueblo-view active" data-view-panel="dashboard">
+        <div class="admin-pueblo-metrics">
+          <article><span id="admin-pueblo-total-users">0</span><small>Participantes</small></article>
+          <article><span id="admin-pueblo-paid-users">0</span><small>Pagos confirmados</small></article>
+          <article><span id="admin-pueblo-total-matches">0</span><small>Partidos</small></article>
+          <article><span id="admin-pueblo-total-predictions">0</span><small>Predicciones</small></article>
+        </div>
+        <div class="admin-pueblo-grid">
+          <section class="admin-pueblo-panel">
+            <div class="admin-pueblo-panel-head"><h2>Estado de la fecha</h2></div>
+            <div id="admin-pueblo-state-card"></div>
+          </section>
+          <section class="admin-pueblo-panel">
+            <div class="admin-pueblo-panel-head"><h2>Acciones</h2></div>
+            <div class="admin-pueblo-actions">
+              <button class="admin-pueblo-btn admin-pueblo-btn-primary" id="admin-pueblo-recalc">Recalcular puntos</button>
+              <button class="admin-pueblo-btn admin-pueblo-btn-secondary" id="admin-pueblo-refresh">Recargar datos</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="admin-pueblo-view" data-view-panel="partidos">
+        <section class="admin-pueblo-panel">
+          <div class="admin-pueblo-panel-head">
+            <h2>Crear o editar partido</h2>
+          </div>
+          <form class="admin-pueblo-form-grid" id="admin-pueblo-match-form">
+            <input type="hidden" id="admin-pueblo-edit-id">
+            <label>Categoria<select class="admin-pueblo-select" id="admin-pueblo-category"></select></label>
+            <label>Jornada<input class="admin-pueblo-input" id="admin-pueblo-round" required placeholder="Ej: 3"></label>
+            <label>Local<select class="admin-pueblo-select" id="admin-pueblo-local" required></select></label>
+            <label>Visitante<select class="admin-pueblo-select" id="admin-pueblo-visitor" required></select></label>
+            <label>Fecha<input class="admin-pueblo-input" id="admin-pueblo-date" type="datetime-local" required></label>
+            <div class="admin-pueblo-form-actions">
+              <button class="admin-pueblo-btn admin-pueblo-btn-primary" type="submit">Guardar partido</button>
+              <button class="admin-pueblo-btn admin-pueblo-btn-secondary" type="button" id="admin-pueblo-cancel-edit">Cancelar</button>
+            </div>
+          </form>
+        </section>
+        <section class="admin-pueblo-panel">
+          <div class="admin-pueblo-panel-head">
+            <h2>Resultados</h2>
+            <div class="admin-pueblo-toolbar">
+              <select class="admin-pueblo-select" id="admin-pueblo-filter-category"></select>
+              <button class="admin-pueblo-btn admin-pueblo-btn-secondary" id="admin-pueblo-save-all-results">Guardar resultados visibles</button>
+            </div>
+          </div>
+          <div id="admin-pueblo-matches"></div>
+        </section>
+      </section>
+
+      <section class="admin-pueblo-view" data-view-panel="usuarios">
+        <section class="admin-pueblo-panel">
+          <div class="admin-pueblo-panel-head">
+            <h2>Usuarios</h2>
+            <div class="admin-pueblo-toolbar">
+              <input class="admin-pueblo-input" id="admin-pueblo-user-search" placeholder="Buscar nombre o WhatsApp">
+              <select class="admin-pueblo-select" id="admin-pueblo-user-filter">
+                <option value="todos">Todos</option>
+                <option value="pagados">Pagados</option>
+                <option value="sin-pago">Sin pago</option>
+                <option value="avisaron">Avisaron pago</option>
+              </select>
+            </div>
+          </div>
+          <div id="admin-pueblo-duplicate-alert"></div>
+          <div class="admin-pueblo-table-wrap">
+            <table class="admin-pueblo-table">
+              <thead><tr><th>Nombre</th><th>WhatsApp</th><th>Puntos</th><th>Pago</th><th>Aviso</th><th>Acciones</th></tr></thead>
+              <tbody id="admin-pueblo-users-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="admin-pueblo-view" data-view-panel="predicciones">
+        <section class="admin-pueblo-panel">
+          <div class="admin-pueblo-panel-head">
+            <h2>Registro de predicciones Pueblo</h2>
+            <div class="admin-pueblo-toolbar">
+              <input class="admin-pueblo-input" id="admin-pueblo-pred-search" placeholder="Buscar usuario o partido">
+              <button class="admin-pueblo-btn admin-pueblo-btn-secondary" id="admin-pueblo-export-csv">CSV</button>
+              <button class="admin-pueblo-btn admin-pueblo-btn-secondary" id="admin-pueblo-export-json">JSON</button>
+            </div>
+          </div>
+          <div id="admin-pueblo-predictions"></div>
+        </section>
+      </section>
+
+      <section class="admin-pueblo-view" data-view-panel="ranking">
+        <section class="admin-pueblo-panel">
+          <div class="admin-pueblo-panel-head"><h2>Ranking</h2></div>
+          <div id="admin-pueblo-ranking"></div>
+        </section>
+      </section>
+
+      <section class="admin-pueblo-view" data-view-panel="config">
+        <section class="admin-pueblo-panel">
+          <div class="admin-pueblo-panel-head"><h2>Gol de la fecha y cierre</h2></div>
+          <form class="admin-pueblo-form-grid" id="admin-pueblo-config-form">
+            <label>Jugador<input class="admin-pueblo-input" id="admin-pueblo-goal-player"></label>
+            <label>Hizo gol<select class="admin-pueblo-select" id="admin-pueblo-goal-made"><option value="pendiente">Pendiente</option><option value="si">Si</option><option value="no">No</option></select></label>
+            <label class="admin-pueblo-check"><input type="checkbox" id="admin-pueblo-goal-closed"> Cerrar prediccion gol</label>
+            <label class="admin-pueblo-check"><input type="checkbox" id="admin-pueblo-date-closed"> Cerrar fecha global</label>
+            <label class="admin-pueblo-check"><input type="checkbox" id="admin-pueblo-ignore-time"> Ventana de carga manual</label>
+            <div class="admin-pueblo-form-actions">
+              <button class="admin-pueblo-btn admin-pueblo-btn-primary" type="submit">Guardar configuracion</button>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="admin-pueblo-modal" id="admin-pueblo-modal" hidden>
+    <div class="admin-pueblo-modal-card">
+      <button class="admin-pueblo-modal-close" id="admin-pueblo-modal-close">Cerrar</button>
+      <div id="admin-pueblo-modal-content"></div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="firebase.js?v=8"></script>
+  <script src="equipos.js?v=8"></script>
+  <script src="admin-pueblo.js?v=8"></script>
+</body>
+</html>

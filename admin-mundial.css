@@ -1,0 +1,1175 @@
+:root {
+  --admin-worldcup-bg: #f6f7fb;
+  --admin-worldcup-surface: #ffffff;
+  --admin-worldcup-surface-soft: #eef2f7;
+  --admin-worldcup-border: #d9e0ea;
+  --admin-worldcup-text: #152033;
+  --admin-worldcup-muted: #627088;
+  --admin-worldcup-primary: #1769e0;
+  --admin-worldcup-primary-dark: #0f4fb3;
+  --admin-worldcup-success: #138a54;
+  --admin-worldcup-danger: #c93434;
+  --admin-worldcup-warning: #b7791f;
+  --admin-worldcup-sidebar: #101828;
+  --admin-worldcup-sidebar-soft: #1d2939;
+}
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+.admin-worldcup-body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--admin-worldcup-bg);
+  color: var(--admin-worldcup-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.admin-worldcup-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #101828 0%, #243b63 100%);
+}
+
+.admin-worldcup-login-card {
+  width: min(420px, 100%);
+  background: var(--admin-worldcup-surface);
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 8px;
+  padding: 28px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.22);
+}
+
+.admin-worldcup-login-card h1,
+.admin-worldcup-topbar h1,
+.admin-worldcup-panel h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.admin-worldcup-login-card label {
+  display: block;
+  margin: 16px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--admin-worldcup-muted);
+}
+
+.admin-worldcup-kicker {
+  margin: 0 0 4px;
+  color: var(--admin-worldcup-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.admin-worldcup-app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+}
+
+.admin-worldcup-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  background: var(--admin-worldcup-sidebar);
+  color: #fff;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.admin-worldcup-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 6px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+
+.admin-worldcup-brand-mark {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #e9b949;
+  color: #102033;
+  font-weight: 900;
+}
+
+.admin-worldcup-brand small {
+  display: block;
+  color: #aab6c8;
+  margin-top: 2px;
+}
+
+.admin-worldcup-nav {
+  display: grid;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.admin-worldcup-nav-btn,
+.admin-worldcup-btn,
+.admin-worldcup-icon-btn {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-worldcup-nav-btn {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 8px;
+  color: #d4dce9;
+  background: transparent;
+  text-align: left;
+  font-weight: 700;
+}
+
+.admin-worldcup-nav-btn:hover,
+.admin-worldcup-nav-btn.active {
+  background: var(--admin-worldcup-sidebar-soft);
+  color: #fff;
+}
+
+.admin-worldcup-sidebar-actions {
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+  padding-top: 18px;
+}
+
+.admin-worldcup-secondary-link,
+.admin-worldcup-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-worldcup-secondary-link {
+  color: #c8d3e4;
+  font-size: 13px;
+}
+
+.admin-worldcup-main {
+  min-width: 0;
+  padding: 22px;
+}
+
+.admin-worldcup-topbar {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.admin-worldcup-status {
+  margin-left: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 999px;
+  background: var(--admin-worldcup-surface);
+  color: var(--admin-worldcup-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.admin-worldcup-icon-btn {
+  display: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: var(--admin-worldcup-surface);
+  border: 1px solid var(--admin-worldcup-border);
+}
+
+.admin-worldcup-view { display: none; }
+.admin-worldcup-view.active { display: block; }
+
+.admin-worldcup-panel {
+  background: var(--admin-worldcup-surface);
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 8px 24px rgba(21,32,51,.05);
+}
+
+.admin-worldcup-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.admin-worldcup-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.admin-worldcup-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.admin-worldcup-metrics article {
+  background: var(--admin-worldcup-surface);
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.admin-worldcup-metrics span {
+  display: block;
+  font-size: clamp(20px, 3vw, 30px);
+  font-weight: 900;
+  color: var(--admin-worldcup-primary);
+  overflow-wrap: anywhere;
+}
+
+.admin-worldcup-metrics small {
+  color: var(--admin-worldcup-muted);
+  font-weight: 700;
+}
+
+.admin-worldcup-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr);
+  gap: 18px;
+}
+
+.admin-worldcup-input,
+.admin-worldcup-select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--admin-worldcup-text);
+  padding: 9px 11px;
+  font: inherit;
+}
+
+.admin-worldcup-toolbar .admin-worldcup-input { width: min(360px, 100%); }
+
+.admin-worldcup-btn {
+  min-height: 40px;
+  padding: 9px 13px;
+  border-radius: 8px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.admin-worldcup-btn-primary {
+  background: var(--admin-worldcup-primary);
+  color: #fff;
+}
+
+.admin-worldcup-btn-primary:hover { background: var(--admin-worldcup-primary-dark); }
+
+.admin-worldcup-btn-secondary {
+  background: var(--admin-worldcup-surface-soft);
+  color: var(--admin-worldcup-text);
+  border: 1px solid var(--admin-worldcup-border);
+}
+
+.admin-worldcup-btn-danger {
+  background: var(--admin-worldcup-danger);
+  color: #fff;
+}
+
+.admin-worldcup-btn-ghost {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.18);
+}
+
+.admin-worldcup-error,
+.admin-worldcup-alert {
+  color: var(--admin-worldcup-danger);
+  background: #fff1f1;
+  border: 1px solid #ffd1d1;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.admin-worldcup-help {
+  color: var(--admin-worldcup-muted);
+  font-size: 13px;
+}
+
+.admin-worldcup-actions-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-worldcup-rowline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--admin-worldcup-border);
+}
+
+.admin-worldcup-match-group {
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.admin-worldcup-match-group h3 {
+  margin: 0;
+  padding: 12px;
+  background: var(--admin-worldcup-surface-soft);
+}
+
+.admin-worldcup-match-row {
+  display: grid;
+  grid-template-columns: 78px minmax(130px, 1fr) 58px 20px 58px minmax(130px, 1fr) 132px 92px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid var(--admin-worldcup-border);
+}
+
+.admin-worldcup-score {
+  width: 58px;
+  min-height: 38px;
+  text-align: center;
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 8px;
+}
+
+.admin-worldcup-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-worldcup-team img {
+  width: 24px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.admin-worldcup-team span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-worldcup-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-worldcup-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.admin-worldcup-table th,
+.admin-worldcup-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--admin-worldcup-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-worldcup-table th {
+  color: var(--admin-worldcup-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.admin-worldcup-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--admin-worldcup-surface-soft);
+  color: var(--admin-worldcup-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-worldcup-pill-ok {
+  background: #e9f8f0;
+  color: var(--admin-worldcup-success);
+}
+
+.admin-worldcup-pill-warn {
+  background: #fff7e8;
+  color: var(--admin-worldcup-warning);
+}
+
+.admin-worldcup-standings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+.admin-worldcup-logbox,
+.admin-worldcup-json {
+  background: #101828;
+  color: #d5e2f5;
+  border-radius: 8px;
+  padding: 14px;
+  overflow: auto;
+  max-height: 520px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.admin-worldcup-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15,23,42,.64);
+  padding: 20px;
+  display: grid;
+  place-items: center;
+}
+
+.admin-worldcup-modal[hidden] {
+  display: none !important;
+}
+
+.admin-worldcup-modal-card {
+  width: min(980px, 100%);
+  max-height: min(86vh, 900px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.admin-worldcup-modal-close {
+  float: right;
+  border: 1px solid var(--admin-worldcup-border);
+  background: var(--admin-worldcup-surface-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BRACKET ELIMINATORIO — Reescritura completa responsive
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Contenedor scroll: NO tiene overflow propio, lo maneja el panel */
+.admin-worldcup-bracket-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto; /* NO smooth: evita el auto-jump al renderizar */
+  padding-bottom: 12px;
+  /* Barra de scroll visible y estilizada */
+  scrollbar-width: thin;
+  scrollbar-color: var(--admin-worldcup-border) transparent;
+}
+
+.admin-worldcup-bracket-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.admin-worldcup-bracket-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-worldcup-bracket-scroll::-webkit-scrollbar-thumb {
+  background: var(--admin-worldcup-border);
+  border-radius: 3px;
+}
+
+/* El bracket es una fila de columnas (rondas), ancho mínimo = sum de columnas */
+.admin-worldcup-bracket {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;                  /* gaps manejados por las rondas */
+  width: max-content;      /* se expande según contenido, nunca fuerza scroll innecesario */
+  min-width: 100%;         /* en pantallas grandes usa todo el ancho disponible */
+  padding: 8px 4px 4px;
+}
+
+/* ── Columna de ronda ─────────────────────────────────────────── */
+.admin-worldcup-round {
+  display: flex;
+  flex-direction: column;
+  /* Ancho fijo por ronda: clamp(columna_min, ideal, columna_max) */
+  width: clamp(160px, 14vw, 200px);
+  flex-shrink: 0;
+  /* Separación horizontal entre rondas */
+  padding: 0 6px;
+  /* Centrado vertical de los partidos dentro de la ronda */
+  justify-content: space-around;
+  gap: 8px;
+}
+
+/* Última ronda (campeón): más estrecha */
+.admin-worldcup-round:last-child {
+  width: clamp(140px, 12vw, 180px);
+}
+
+.admin-worldcup-round-title {
+  text-align: center;
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--admin-worldcup-primary);
+  padding: 4px 0 8px;
+  border-bottom: 2px solid var(--admin-worldcup-primary);
+  margin-bottom: 4px;
+}
+
+/* ── Tarjeta de partido en el bracket ────────────────────────── */
+.admin-worldcup-bracket-match {
+  background: var(--admin-worldcup-surface);
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 8px;
+  padding: 7px 8px;
+  /* Altura mínima fija: asegura alineación entre rondas */
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 5px;
+  position: relative;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.admin-worldcup-bracket-match:hover {
+  border-color: var(--admin-worldcup-primary);
+  box-shadow: 0 2px 12px rgba(23, 105, 224, .12);
+}
+
+.admin-worldcup-match-code {
+  color: var(--admin-worldcup-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+/* ── Botón equipo dentro del bracket ─────────────────────────── */
+.admin-worldcup-team-btn {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 6px;
+  background: var(--admin-worldcup-surface-soft);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  cursor: pointer;
+  color: var(--admin-worldcup-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background .12s, border-color .12s, color .12s;
+  text-align: left;
+  overflow: hidden;          /* no rompe el layout */
+}
+
+.admin-worldcup-team-btn + .admin-worldcup-team-btn {
+  margin-top: 4px;
+}
+
+.admin-worldcup-team-btn.selected {
+  border-color: var(--admin-worldcup-primary);
+  background: #eaf2ff;
+  color: var(--admin-worldcup-primary-dark);
+  font-weight: 800;
+}
+
+.admin-worldcup-team-btn.defeated {
+  opacity: .38;
+}
+
+.admin-worldcup-team-btn.empty {
+  justify-content: center;
+  color: var(--admin-worldcup-muted);
+  cursor: default;
+  font-style: italic;
+  font-size: 11px;
+}
+
+.admin-worldcup-team-btn:not(.empty):not(.defeated):hover {
+  background: #dbeafe;
+  border-color: var(--admin-worldcup-primary);
+}
+
+.admin-worldcup-team-btn img {
+  width: 20px;
+  height: 14px;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.admin-worldcup-team-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Conector visual entre rondas ───────────────────────────── */
+/* 
+  Los conectores se hacen con pseudo-elementos CSS en lugar de JS,
+  eliminando el problema de recálculo al renderizar.
+*/
+.admin-worldcup-bracket-connector {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex-shrink: 0;
+  width: 16px;
+}
+
+.admin-worldcup-bracket-connector::before {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 50%;
+  border-right: 2px solid var(--admin-worldcup-border);
+  border-top: 2px solid var(--admin-worldcup-border);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE: Desktop grande (≥1400px) — mostrar más rondas
+   ════════════════════════════════════════════════════════════════ */
+@media (min-width: 1400px) {
+  .admin-worldcup-round {
+    width: clamp(180px, 13vw, 210px);
+    padding: 0 8px;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE: Tablet (≤980px)
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 980px) {
+  .admin-worldcup-app { grid-template-columns: 1fr; }
+  .admin-worldcup-sidebar {
+    position: fixed;
+    transform: translateX(-105%);
+    transition: transform .2s ease;
+    width: min(300px, 88vw);
+  }
+  .admin-worldcup-sidebar.open { transform: translateX(0); }
+  .admin-worldcup-icon-btn { display: inline-grid; place-items: center; }
+  .admin-worldcup-main { padding: 14px; }
+  .admin-worldcup-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-worldcup-grid { grid-template-columns: 1fr; }
+  .admin-worldcup-panel-head { align-items: flex-start; flex-direction: column; }
+  .admin-worldcup-status { margin-left: 0; }
+
+  /* Bracket en tablet: columnas más estrechas */
+  .admin-worldcup-round {
+    width: clamp(148px, 36vw, 176px);
+    padding: 0 5px;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE: Mobile (≤680px)
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 680px) {
+  .admin-worldcup-topbar { align-items: flex-start; flex-wrap: wrap; }
+  .admin-worldcup-metrics { grid-template-columns: 1fr; }
+  .admin-worldcup-match-row {
+    grid-template-columns: 1fr 54px 16px 54px;
+    gap: 7px;
+  }
+  .admin-worldcup-match-row > small,
+  .admin-worldcup-match-row > .admin-worldcup-team:first-of-type,
+  .admin-worldcup-match-row > .admin-worldcup-team:nth-of-type(2) {
+    grid-column: 1 / -1;
+  }
+  .admin-worldcup-match-row .admin-worldcup-select,
+  .admin-worldcup-match-row .admin-worldcup-btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .admin-worldcup-toolbar,
+  .admin-worldcup-toolbar .admin-worldcup-input,
+  .admin-worldcup-toolbar .admin-worldcup-select,
+  .admin-worldcup-toolbar .admin-worldcup-btn {
+    width: 100%;
+  }
+
+  /* Bracket en mobile: tarjetas compactas */
+  .admin-worldcup-round {
+    width: clamp(130px, 44vw, 156px);
+    padding: 0 4px;
+    gap: 6px;
+  }
+
+  .admin-worldcup-round-title {
+    font-size: 10px;
+    padding: 3px 0 6px;
+  }
+
+  .admin-worldcup-bracket-match {
+    padding: 5px 6px;
+    min-height: 76px;
+    gap: 4px;
+  }
+
+  .admin-worldcup-match-code {
+    font-size: 9px;
+  }
+
+  .admin-worldcup-team-btn {
+    min-height: 28px;
+    padding: 4px 5px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .admin-worldcup-team-btn img {
+    width: 16px;
+    height: 11px;
+  }
+
+  .admin-worldcup-team-btn + .admin-worldcup-team-btn {
+    margin-top: 3px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BRACKET — WRAPPER FULLSCREEN FIJO
+   El bracket vive en su propio contenedor de altura controlada.
+   El usuario navega SOLO dentro del bracket, sin mover toda la página.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Sección bracket: limitar altura del panel para que el scroll sea interno */
+[data-view-panel="bracket"] .admin-worldcup-panel {
+  display: flex;
+  flex-direction: column;
+  /* Altura máxima = viewport minus header/topbar/panel-head */
+  max-height: calc(100vh - 160px);
+  overflow: hidden;
+}
+
+[data-view-panel="bracket"] .admin-worldcup-panel-head {
+  flex-shrink: 0;
+}
+
+/* El scroll container ocupa todo el espacio restante del panel */
+.admin-worldcup-bracket-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: auto;           /* bidireccional dentro del wrapper */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto !important; /* CRÍTICO: evita auto-jump al renderizar */
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--admin-worldcup-border) transparent;
+  /* Cursor que indica scroll horizontal disponible */
+  cursor: default;
+}
+
+.admin-worldcup-bracket-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.admin-worldcup-bracket-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-worldcup-bracket-scroll::-webkit-scrollbar-thumb {
+  background: var(--admin-worldcup-border);
+  border-radius: 3px;
+}
+
+/* El bracket interno: flex horizontal de rondas */
+.admin-worldcup-bracket {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  width: max-content !important;  /* NO fuerza ancho fijo */
+  min-width: 100%;
+  padding: 6px 4px 4px;
+  gap: 0;
+}
+
+/* ── Columna de ronda ─────────────────────────────────────────── */
+.admin-worldcup-round {
+  display: flex !important;
+  flex-direction: column !important;
+  width: clamp(158px, 13vw, 196px) !important;
+  flex-shrink: 0 !important;
+  padding: 0 5px !important;
+  justify-content: space-around;
+  gap: 6px;
+}
+
+/* Título sticky de ronda: siempre visible al hacer scroll vertical */
+.admin-worldcup-round-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--admin-worldcup-bg);
+  text-align: center;
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--admin-worldcup-primary);
+  padding: 4px 0 8px;
+  border-bottom: 2px solid var(--admin-worldcup-primary);
+  margin-bottom: 4px;
+}
+
+/* ── Tarjeta de partido ───────────────────────────────────────── */
+.admin-worldcup-bracket-match {
+  background: var(--admin-worldcup-surface);
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 7px;
+  padding: 6px 7px !important;
+  min-height: 80px !important;   /* compacto */
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between;
+  gap: 4px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.admin-worldcup-bracket-match:hover {
+  border-color: var(--admin-worldcup-primary);
+  box-shadow: 0 2px 10px rgba(23,105,224,.1);
+}
+
+.admin-worldcup-match-code {
+  color: var(--admin-worldcup-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+/* ── Botón equipo ─────────────────────────────────────────────── */
+.admin-worldcup-team-btn {
+  width: 100% !important;
+  min-height: 30px !important;
+  border: 1px solid var(--admin-worldcup-border);
+  border-radius: 5px;
+  background: var(--admin-worldcup-surface-soft);
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px;
+  padding: 4px 6px !important;
+  cursor: pointer;
+  color: var(--admin-worldcup-text);
+  font: inherit;
+  font-size: 11.5px !important;
+  font-weight: 600;
+  transition: background .12s, border-color .12s, color .12s;
+  overflow: hidden !important;
+}
+
+.admin-worldcup-team-btn + .admin-worldcup-team-btn {
+  margin-top: 3px;
+}
+
+.admin-worldcup-team-btn.selected {
+  border-color: var(--admin-worldcup-primary);
+  background: #eaf2ff;
+  color: var(--admin-worldcup-primary-dark);
+  font-weight: 800;
+}
+
+.admin-worldcup-team-btn.defeated {
+  opacity: .35;
+}
+
+.admin-worldcup-team-btn.empty {
+  justify-content: center;
+  color: var(--admin-worldcup-muted);
+  cursor: default;
+  font-style: italic;
+  font-size: 10px !important;
+}
+
+.admin-worldcup-team-btn:not(.empty):not(.defeated):hover {
+  background: #dbeafe;
+  border-color: var(--admin-worldcup-primary);
+}
+
+.admin-worldcup-team-btn img {
+  width: 18px !important;
+  height: 13px !important;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.admin-worldcup-team-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Desktop grande: columnas levemente más anchas ───────────── */
+@media (min-width: 1400px) {
+  .admin-worldcup-round {
+    width: clamp(178px, 12vw, 208px) !important;
+    padding: 0 7px !important;
+  }
+  .admin-worldcup-team-btn {
+    font-size: 12px !important;
+    min-height: 32px !important;
+  }
+}
+
+/* ── Tablet ───────────────────────────────────────────────────── */
+@media (max-width: 980px) {
+  [data-view-panel="bracket"] .admin-worldcup-panel {
+    max-height: calc(100vh - 130px);
+  }
+  .admin-worldcup-round {
+    width: clamp(146px, 34vw, 172px) !important;
+    padding: 0 4px !important;
+  }
+}
+
+/* ── Mobile ───────────────────────────────────────────────────── */
+@media (max-width: 680px) {
+  [data-view-panel="bracket"] .admin-worldcup-panel {
+    max-height: calc(100vh - 110px);
+    padding: 12px 10px;
+  }
+  .admin-worldcup-round {
+    width: clamp(128px, 42vw, 152px) !important;
+    padding: 0 3px !important;
+    gap: 5px;
+  }
+  .admin-worldcup-round-title {
+    font-size: 9px;
+    padding: 3px 0 5px;
+  }
+  .admin-worldcup-bracket-match {
+    padding: 5px 5px !important;
+    min-height: 68px !important;
+    gap: 3px;
+  }
+  .admin-worldcup-team-btn {
+    min-height: 26px !important;
+    font-size: 10.5px !important;
+    padding: 3px 4px !important;
+    gap: 3px;
+  }
+  .admin-worldcup-team-btn img {
+    width: 15px !important;
+    height: 10px !important;
+  }
+}/* ═══════════════════════════════════════════════════════════════════
+   admin-mundial-desktop.patch.css
+   SOLO desktop — no toca nada de mobile ni tablet
+   Agregar al final de admin-mundial.css (o como <link> separado)
+   ═══════════════════════════════════════════════════════════════════
+
+   DIAGNÓSTICO DE LOS CULPABLES
+   ────────────────────────────
+   El espacio vacío en desktop tiene TRES causas encadenadas:
+
+   1. .admin-worldcup-main { padding: 22px }
+      Correcto de base, pero se combina mal con lo siguiente.
+
+   2. .admin-worldcup-match-row {
+        grid-template-columns: 78px minmax(130px, 1fr) 58px 20px 58px minmax(130px, 1fr) 132px 92px;
+      }
+      Las columnas de los equipos tienen un máximo de 1fr pero el
+      contenedor padre no les permite crecer porque...
+
+   3. .admin-worldcup-standings-grid {
+        grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      }
+      Con 12 grupos el grid los encaja en columnas de 290px mínimo,
+      lo que fuerza 3–4 columnas en pantallas de 1400px pero deja
+      muchísimo espacio si el contenedor padre es angosto.
+
+   4. .admin-worldcup-round { width: clamp(158px, 13vw, 196px) }
+      El 13vw se calcula sobre el VIEWPORT TOTAL. Con sidebar de 280px
+      ocupada, el área útil es viewport − 280px − padding.
+      En 1440px → 13vw = 187px → 6 rondas × 187px = 1122px → OK.
+      Pero el problema real es que .admin-worldcup-main tiene
+      min-width: 0 sin ningún override de ancho explícito, por lo que
+      el navegador puede decidir no expandirlo al 100%.
+
+   SOLUCIÓN
+   ────────
+   • .admin-worldcup-main → width: 100% explícito
+   • .admin-worldcup-round → clamp más agresivo en desktop
+   • .admin-worldcup-standings-grid → columnas más anchas para usar el espacio
+   • .admin-worldcup-match-row → columnas de equipos con más espacio
+   • Bracket: altura máxima que aproveche más pantalla
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ────────────────────────────────────────────────────────────────
+   DESKTOP BASE (≥ 981px)
+   ──────────────────────────────────────────────────────────────── */
+@media (min-width: 981px) {
+
+  /* 1. El área de contenido principal debe ocupar TODO el ancho
+        disponible a la derecha del sidebar. min-width:0 solo evita
+        desbordamiento, pero no garantiza expansión. */
+  .admin-worldcup-main {
+    width: 100%;
+    padding: 22px 28px; /* un poco más de padding lateral en desktop */
+  }
+
+  /* 2. Tabla de grupos (posiciones): columnas más anchas para
+        aprovechar el espacio horizontal. Con 12 grupos, el grid
+        auto-fit puede distribuir 3-4 col bien. minmax(340px, 1fr)
+        da tarjetas más anchas en pantallas grandes. */
+  .admin-worldcup-standings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 16px;
+  }
+
+  /* 3. Fila de partido (partidos/grupos): las columnas de nombre de
+        equipo crecen con el ancho disponible.
+        Original: minmax(130px, 1fr) → nuevo: minmax(160px, 1fr)
+        Columna de estado/select: más espacio */
+  .admin-worldcup-match-row {
+    grid-template-columns:
+      88px                    /* fecha/hora */
+      minmax(160px, 1.2fr)    /* equipo local */
+      64px                    /* gol local */
+      18px                    /* vs */
+      64px                    /* gol visitante */
+      minmax(160px, 1.2fr)    /* equipo visitante */
+      148px                   /* estado select */
+      96px;                   /* botón guardar */
+    gap: 10px;
+  }
+
+  /* 4. Bracket: rondas más anchas en desktop para aprovechar el espacio.
+        clamp(158px, 13vw, 196px) → clamp(180px, 15vw, 240px)
+        El área útil en desktop ≈ viewport − 280px sidebar − 56px padding
+        En 1440px: 15vw = 216px → 6 rondas × (216 + 14 gap) ≈ 1380px → 
+        cabe perfectamente y usa el ancho disponible */
+  .admin-worldcup-round {
+    width: clamp(180px, 15vw, 240px) !important;
+    padding: 0 7px !important;
+    gap: 8px;
+  }
+
+  /* Última ronda (campeón) puede ser más estrecha */
+  .admin-worldcup-round:last-child {
+    width: clamp(160px, 13vw, 210px) !important;
+  }
+
+  /* Botones de equipo en bracket: texto más legible */
+  .admin-worldcup-team-btn {
+    font-size: 12.5px !important;
+    min-height: 34px !important;
+    padding: 5px 8px !important;
+  }
+
+  .admin-worldcup-team-btn img {
+    width: 22px !important;
+    height: 16px !important;
+  }
+
+  /* 5. Bracket: panel con más altura disponible en desktop */
+  [data-view-panel="bracket"] .admin-worldcup-panel {
+    max-height: calc(100vh - 140px);
+  }
+
+  /* 6. Tabla de la tabla de posiciones interna: sin min-width forzado
+        que cause scroll innecesario cuando hay espacio */
+  .admin-worldcup-match-group .admin-worldcup-table {
+    min-width: unset;
+    width: 100%;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────
+   DESKTOP GRANDE (≥ 1400px) — aprovechar pantallas anchas
+   ──────────────────────────────────────────────────────────────── */
+@media (min-width: 1400px) {
+
+  .admin-worldcup-main {
+    padding: 24px 36px;
+  }
+
+  .admin-worldcup-round {
+    width: clamp(200px, 13.5vw, 260px) !important;
+    padding: 0 9px !important;
+  }
+
+  .admin-worldcup-round:last-child {
+    width: clamp(180px, 11vw, 230px) !important;
+  }
+
+  .admin-worldcup-team-btn {
+    font-size: 13px !important;
+    min-height: 36px !important;
+  }
+
+  .admin-worldcup-standings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 18px;
+  }
+
+  /* Fila de partido: aún más espacio para los nombres de equipo */
+  .admin-worldcup-match-row {
+    grid-template-columns:
+      96px
+      minmax(180px, 1.4fr)
+      68px
+      18px
+      68px
+      minmax(180px, 1.4fr)
+      160px
+      100px;
+    gap: 12px;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────
+   DESKTOP MUY GRANDE (≥ 1800px) — ultra-wide / 4K
+   ──────────────────────────────────────────────────────────────── */
+@media (min-width: 1800px) {
+
+  .admin-worldcup-round {
+    width: clamp(220px, 11vw, 280px) !important;
+    padding: 0 10px !important;
+  }
+
+  .admin-worldcup-standings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  }
+}

@@ -8,21 +8,16 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=10">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2c3e50">
 </head>
 <body>
     <header>
         <div class="header-brand">
-            <img src="img/escudos/independiente.png?v=5" alt="Escudo Independiente" class="icono-escudo">
+            <img src="img/escudos/independiente.png?v=6" alt="Escudo Independiente" class="icono-escudo"
+                onerror="this.style.display='none'">
             <h1 class="header-title">Prode del Pueblo</h1>
-        </div>
-        <p class="subtitle">¡Demostrá cuánto sabés de fútbol!</p>
-        <p class="precio-prode">Bono contribución: $2000</p>
-        <div class="header-alias">
-            <span class="header-alias-label">🏦 Alias: <strong>escuela.rojo</strong></span>
-            <p class="header-alias-desc">Transferí al alias, completá tu registro y enviá el comprobante por WhatsApp para activar tu cuenta.</p>
         </div>
         <div class="tabs-torneo">
             <button class="tab-torneo tab-activa" data-torneo="pueblo" onclick="cambiarTorneo('pueblo')">⚽ Pueblo</button>
@@ -37,6 +32,10 @@
         ============================================== -->
         <div id="seccion-pueblo">
             <div class="container-prode">
+                <div class="header-alias" style="margin-bottom: 1.5rem;">
+                    <span class="header-alias-label">🏦 Alias: <strong>escuela.rojo</strong></span>
+                    <p class="header-alias-desc">Transferí al alias y enviá el comprobante por WhatsApp para activar tu cuenta.</p>
+                </div>
 
                 <section class="card" id="registro-section">
                     <h2>Tus Datos</h2>
@@ -98,58 +97,177 @@
         </div><!-- /seccion-pueblo -->
 
         <!-- =============================================
-             SECCIÓN MUNDIAL — PRÓXIMAMENTE
+             SECCIÓN MUNDIAL 2026
         ============================================== -->
         <div id="seccion-mundial" style="display:none;">
-            <div class="mundial-coming-soon">
-                <div class="mundial-cs-glow"></div>
+            <div class="container-prode">
 
-                <!-- Copa del Mundo PNG (fuente externa, transparente) -->
-                <!-- URL: https://upload.wikimedia.org/wikipedia/en/thumb/6/67/2026_FIFA_World_Cup_emblem.svg/800px-2026_FIFA_World_Cup_emblem.svg.png -->
-                <img
-                    src="https://static.wikia.nocookie.net/logopedia/images/1/14/2026_FIFA_World_Cup_%28Inverted%29.svg/revision/latest/scale-to-width-down/250?cb=20230523174302"
-                    class="mundial-cs-trophy icono-mundial"
-                    alt="Copa del Mundo"
-                    onerror="this.src='https://cdn-icons-png.flaticon.com/512/3514/3514491.png'"
-                >
+                <!-- DATOS -->
+                <section class="card">
+                    <h2>🌍 Tus Datos</h2>
+                    <div class="form-group">
+                        <label for="mw-nombre">Nombre completo</label>
+                        <input type="text" id="mw-nombre" placeholder="Ej: Juan Pérez" autocomplete="name">
+                    </div>
+                    <div class="form-group" style="margin-top:0.75rem;">
+                        <label for="mw-whatsapp">WhatsApp</label>
+                        <input type="tel" id="mw-whatsapp" placeholder="Ej: 3412345678" autocomplete="tel">
+                    </div>
+                </section>
 
-                <div class="mundial-cs-badge">MUY PRONTO</div>
+                <!-- PUNTUACIÓN Y PREMIOS -->
+                <section class="card" style="background: linear-gradient(145deg, rgba(212,175,55,0.05), rgba(0,0,0,0.6)); border: 1px solid rgba(212,175,55,0.3);">
+                    <h2 style="color: var(--primary); text-align: center;">🏆 Prode Mundial 2026</h2>
+                    <p style="text-align: center; color: #fff; font-size: 1.1rem; margin-bottom: 0.5rem;">
+                        <strong>Un solo formulario, un mes de competencia y $500.000 para el campeón.</strong>
+                    </p>
+                    <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; text-align: center;">
+                        <div>
+                            <span style="display:block; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Valor Inscripción</span>
+                            <strong style="color: #22c55e; font-size: 1.2rem;">💰 $15.000</strong>
+                        </div>
+                        <div>
+                            <span style="display:block; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Premio Principal (1° Puesto)</span>
+                            <strong style="color: var(--primary); font-size: 1.2rem;">🏆 $500.000</strong>
+                        </div>
+                    </div>
+                    <p style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem;">
+                        <em>Y si llegamos a más participantes: 2° puesto $100.000 | 3° puesto $50.000</em>
+                    </p>
+                    
+                    <hr style="border: 0; height: 1px; background: rgba(255,255,255,0.1); margin: 1.5rem 0;">
+                    
+                    <h3 style="font-family: var(--font-display); font-size: 1.1rem; color: #fff; margin-bottom: 1rem;">🎯 Sistema de Puntuación</h3>
+                    
+                    <div class="mw-pts-info" style="margin-bottom: 1rem;">
+                        <div class="mw-pts-item">
+                            <span class="mw-pts-num" style="color:#d4af37;">4</span>
+                            <span class="mw-pts-label">Exacto</span>
+                        </div>
+                        <div class="mw-pts-item">
+                            <span class="mw-pts-num" style="color:#94a3b8;">1</span>
+                            <span class="mw-pts-label">Ganador</span>
+                        </div>
+                        <div class="mw-pts-item">
+                            <span class="mw-pts-num" style="color:#374151;">0</span>
+                            <span class="mw-pts-label">Error</span>
+                        </div>
+                    </div>
+                    
+                    <div style="font-size: 0.85rem; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; margin-bottom: 0.3rem;">
+                            <span style="color: var(--text-muted);">Clasificado de Grupos</span> <strong style="color: #fff;">10 pts</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; margin-bottom: 0.3rem;">
+                            <span style="color: var(--text-muted);">Acertar equipo en 4tos</span> <strong style="color: #fff;">20 pts</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; margin-bottom: 0.3rem;">
+                            <span style="color: var(--text-muted);">Acertar equipo en Semis</span> <strong style="color: #fff;">30 pts</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; margin-bottom: 0.3rem;">
+                            <span style="color: var(--text-muted);">Acertar Finalistas</span> <strong style="color: #fff;">50 pts</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; margin-bottom: 0.3rem;">
+                            <span style="color: var(--text-muted);">Acertar Campeón</span> <strong style="color: var(--primary);">100 pts</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; margin-bottom: 0.3rem;">
+                            <span style="color: var(--text-muted);">Goleador Mundial</span> <strong style="color: #22c55e;">35 pts</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.3rem; margin-bottom: 0.3rem;">
+                            <span style="color: var(--text-muted);">Goleador Argentina</span> <strong style="color: #22c55e;">25 pts</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">Valla Menos Vencida</span> <strong style="color: #22c55e;">25 pts</strong>
+                        </div>
+                    </div>
+                </section>
 
-                <h2 class="mundial-cs-title">Mundial 2026</h2>
+                <!-- PARTIDOS -->
+                <section class="card">
+                    <h2>⚽ Fase de Grupos</h2>
 
-                <p class="mundial-cs-desc">
-                    Estamos preparando una experiencia <strong>premium</strong> para el Mundial. Muy pronto vas a poder competir a nivel internacional.
-                </p>
+                    <!-- BARRA DE PROGRESO -->
+                    <div class="mw-progreso-wrap">
+                        <div class="mw-progreso-header">
+                            <span class="mw-progreso-label">Progreso</span>
+                            <span class="mw-progreso-count" id="mw-progreso-count">0 / 72 partidos</span>
+                        </div>
+                        <div class="mw-progreso-bar-bg">
+                            <div class="mw-progreso-bar-fill" id="mw-progreso-bar" style="width:0%"></div>
+                        </div>
+                    </div>
 
-                <div class="mundial-cs-divider">
-                    <span>⭐</span>
-                </div>
+                    <div id="mw-partidos-list">
+                        <p style="color:var(--text-muted);text-align:center;padding:2rem 0;">Cargando partidos...</p>
+                    </div>
 
-                <p class="mundial-cs-sub">
-                    Seguí jugando el Prode del Pueblo mientras tanto y<br>
-                    afilá la puntería para el Mundial 🌎
-                </p>
+                    <button id="btn-mw-confirmar" class="btn-primary" style="margin-top:1.5rem;" onclick="enviarPrediccionesMundial()">
+                        🌍 Confirmar Predicciones
+                    </button>
+                </section>
 
-                <button class="btn-volver-pueblo" onclick="cambiarTorneo('pueblo')">
-                    ⚽ Volver al Prode del Pueblo
-                </button>
+                <!-- DASHBOARD / MIS PRONÓSTICOS -->
+                <section class="card" id="mw-dashboard-section" style="display:none; padding: 2rem 1rem;">
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <h2 style="justify-content: center; font-size: 1.5rem; color: var(--primary);">🏆 Mis Pronósticos</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Tu camino a la gloria del Mundial 2026</p>
+                    </div>
+                    
+                    <div id="mw-dashboard-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+                        <div style="background: rgba(212,175,55,0.05); border: 1px solid rgba(212,175,55,0.2); padding: 1rem; border-radius: 12px; text-align: center;">
+                            <div style="font-family: var(--font-display); font-size: 2rem; color: var(--primary);" id="mw-dash-completados">0/72</div>
+                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px;">Completados</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 1rem; border-radius: 12px; text-align: center;">
+                            <div style="font-family: var(--font-display); font-size: 2rem; color: #fff;" id="mw-dash-puntos">0</div>
+                            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px;">Pts Potenciales</div>
+                        </div>
+                    </div>
+
+                    <h3 style="font-family: var(--font-display); font-size: 1.2rem; text-align: center; margin-bottom: 1rem; color: #fff;">⚔️ Fase Eliminatoria</h3>
+                    <p style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                        Selecciona qué equipo avanzará a la siguiente ronda.
+                    </p>
+                    
+                    <div class="mw-bracket-wrapper" id="mw-bracket-container">
+                        <p style="color:var(--text-muted);text-align:center;">Completa la fase de grupos para generar tu bracket de 16avos de final.</p>
+                    </div>
+
+                    <h3 style="font-family: var(--font-display); font-size: 1.2rem; text-align: center; margin-top: 2rem; margin-bottom: 1rem; color: #fff;">🌟 Bonus (Predicciones Generales)</h3>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="mw-bonus-goleador">Goleador del Mundial (35 pts)</label>
+                            <input type="text" id="mw-bonus-goleador" placeholder="Ej: Kylian Mbappé" oninput="mwAutoGuardarDebounced()">
+                        </div>
+                        <div class="form-group">
+                            <label for="mw-bonus-goleador-arg">Goleador de Argentina (25 pts)</label>
+                            <input type="text" id="mw-bonus-goleador-arg" placeholder="Ej: Lionel Messi" oninput="mwAutoGuardarDebounced()">
+                        </div>
+                        <div class="form-group">
+                            <label for="mw-bonus-valla">Valla menos vencida (25 pts)</label>
+                            <input type="text" id="mw-bonus-valla" placeholder="Ej: Dibu Martínez" oninput="mwAutoGuardarDebounced()">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- RANKING -->
+                <section class="card">
+                    <h2>🏆 Tabla Mundial</h2>
+                    <div id="mw-mi-posicion" style="display:none;"></div>
+                    <div id="mw-ranking-list" class="ranking-container">
+                        <p style="color:var(--text-muted);text-align:center;padding:1rem;">Cargando ranking...</p>
+                    </div>
+                </section>
+
             </div>
         </div><!-- /seccion-mundial -->
 
+        <!-- Toast guardado automático -->
+        <div class="mw-toast" id="mw-toast">✓ Guardado automáticamente</div>
+
         <!-- =============================================
-             SECCIÓN INSTITUCIONAL
+             SECCIÓN INSTITUCIONAL (Removida)
         ============================================== -->
-        <section class="info-bono">
-            <div class="info-bono-inner">
-                <span class="info-bono-icon">🏠</span>
-                <p class="info-bono-text">
-                    Lanzamos este bono con el fin de recaudar fondos para nuestra sala de jugadores,
-                    un espacio propio diseñado para los chicos del club. Buscamos brindarles un lugar
-                    de encuentro que fomente los vínculos y fortalezca la unión del grupo, potenciando
-                    su sentido de pertenencia a nuestra institución.
-                </p>
-            </div>
-        </section>
 
     </main>
 
@@ -157,9 +275,10 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
-    <script src="firebase.js?v=5"></script>
-    <script src="equipos.js?v=5"></script>
-    <script src="app.js?v=5"></script>
+    <script src="firebase.js?v=6"></script>
+    <script src="equipos.js?v=6"></script>
+    <script src="mundial.js?v=10"></script>
+    <script src="app.js?v=10"></script>
 
     <footer class="footer-dev">
         Desarrollado por <a href="https://instagram.com/masalvador23" target="_blank" rel="noopener">@masalvador23</a>

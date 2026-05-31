@@ -81,6 +81,28 @@
             <p class="admin-worldcup-help">Los recalculos usan resultados finalizados y el bracket oficial publicado.</p>
           </section>
         </div>
+        <div class="admin-worldcup-grid" style="margin-top:20px;">
+          <section class="admin-worldcup-panel">
+            <div class="admin-worldcup-panel-head">
+              <h2>Resultados Oficiales Bonus</h2>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px; max-width:400px;">
+              <div>
+                <label>Goleador Mundial</label>
+                <input id="admin-bonus-goleador" class="admin-worldcup-input" type="text" placeholder="Ej: Mbappé">
+              </div>
+              <div>
+                <label>Goleador Argentina</label>
+                <input id="admin-bonus-goleador-arg" class="admin-worldcup-input" type="text" placeholder="Ej: Messi">
+              </div>
+              <div>
+                <label>Valla Invicta</label>
+                <input id="admin-bonus-valla" class="admin-worldcup-input" type="text" placeholder="Ej: Dibu Martínez">
+              </div>
+              <button class="admin-worldcup-btn admin-worldcup-btn-primary" style="margin-top:10px; align-self:flex-start;" id="admin-save-bonus">Guardar Oficiales</button>
+            </div>
+          </section>
+        </div>
       </section>
 
       <section class="admin-worldcup-view" data-view-panel="partidos">
@@ -202,12 +224,8 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="firebase.js?v=8"></script>
   <script src="equipos.js?v=8"></script>
-  <script src="mundial.js?v=8"></script>
-  <script src="admin-mundial.js?v=8"></script>
-  <!--
-    bracket-patch.js: DEBE ir después de admin-mundial.js
-    Corrige: scroll reset, ancho fijo, experiencia mobile.
-  -->
-  <script src="bracket-patch.js?v=1"></script>
+  <script src="mundial.js?v=9"></script>
+  <script src="admin-mundial.js?v=9"></script>
+  <!-- bracket-patch.js ya no es necesario: correcciones integradas en admin-mundial.js -->
 </body>
 </html>

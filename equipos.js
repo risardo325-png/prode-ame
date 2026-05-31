@@ -136,6 +136,39 @@ const TORNEOS_CONFIG = {
             montoPorFecha: 1000,
             moneda: 'ARS',
         },
+
+        // ─── GRUPOS DEL MUNDIAL 2026 ───────────────────────────────────────
+        // Fuente: sorteo FIFA, Washington D.C., 5 dic 2025
+        grupos: {
+            A: ['México', 'Sudáfrica', 'República de Corea', 'Chequia'],
+            B: ['Canadá', 'Bosnia y Herzegovina', 'Catar', 'Suiza'],
+            C: ['Brasil', 'Marruecos', 'Haití', 'Escocia'],
+            D: ['Estados Unidos', 'Paraguay', 'Australia', 'Turquía'],
+            E: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'],
+            F: ['Países Bajos', 'Japón', 'Túnez', 'Noruega'],
+            G: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'],
+            H: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'],
+            I: ['Francia', 'Polonia', 'Arabia Saudí', 'Senegal'],
+            J: ['Argentina', 'Croacia', 'Ghana', 'Panamá'],
+            K: ['Portugal', 'Colombia', 'Uzbekistán', 'Irak'],
+            L: ['Inglaterra', 'Eslovaquia', 'Suecia', 'RD Congo'],
+        },
+
+        // Código ISO de bandera para cada selección (usar con flagcdn.com)
+        banderasCodigo: {
+            'México': 'mx', 'Sudáfrica': 'za', 'República de Corea': 'kr', 'Chequia': 'cz',
+            'Canadá': 'ca', 'Bosnia y Herzegovina': 'ba', 'Catar': 'qa', 'Suiza': 'ch',
+            'Brasil': 'br', 'Marruecos': 'ma', 'Haití': 'ht', 'Escocia': 'gb-sct',
+            'Estados Unidos': 'us', 'Paraguay': 'py', 'Australia': 'au', 'Turquía': 'tr',
+            'Alemania': 'de', 'Curazao': 'cw', 'Costa de Marfil': 'ci', 'Ecuador': 'ec',
+            'Países Bajos': 'nl', 'Japón': 'jp', 'Túnez': 'tn', 'Noruega': 'no',
+            'Bélgica': 'be', 'Egipto': 'eg', 'Irán': 'ir', 'Nueva Zelanda': 'nz',
+            'España': 'es', 'Cabo Verde': 'cv', 'Arabia Saudí': 'sa', 'Uruguay': 'uy',
+            'Francia': 'fr', 'Polonia': 'pl', 'Senegal': 'sn',
+            'Argentina': 'ar', 'Croacia': 'hr', 'Ghana': 'gh', 'Panamá': 'pa',
+            'Portugal': 'pt', 'Colombia': 'co', 'Uzbekistán': 'uz', 'Irak': 'iq',
+            'Inglaterra': 'gb-eng', 'Eslovaquia': 'sk', 'Suecia': 'se', 'RD Congo': 'cd',
+        },
     },
 };
 
@@ -220,4 +253,54 @@ function torneoTieneCategorias(torneoId) {
 function getPagosConfig(torneoId) {
     const cfg = getTorneoConfig(torneoId);
     return cfg.pagos || { habilitado: false };
+}
+/**
+ * Devuelve los grupos del Mundial (solo para torneo 'mundial').
+ * @returns {Object.<string, string[]>}
+ */
+function getGruposMundial() {
+    return TORNEOS_CONFIG.mundial.grupos || {};
+}
+
+/**
+ * Devuelve el código ISO de bandera para un país.
+ * @param {string} pais
+ * @returns {string}
+ */
+function getBanderaCodigo(pais) {
+    const normalize = (str) => {
+        if (!str) return '';
+        return str.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    };
+
+    const nPais = normalize(pais);
+
+    const overrideDict = {
+        'mexico': 'mx', 'sudafrica': 'za', 'corea del sur': 'kr', 'republica de corea': 'kr', 'chequia': 'cz',
+        'canada': 'ca', 'bosnia y herzegovina': 'ba', 'catar': 'qa', 'suiza': 'ch',
+        'brasil': 'br', 'marruecos': 'ma', 'haiti': 'ht', 'escocia': 'gb-sct',
+        'estados unidos': 'us', 'usa': 'us', 'paraguay': 'py', 'australia': 'au', 'turquia': 'tr',
+        'alemania': 'de', 'curazao': 'cw', 'costa de marfil': 'ci', 'ecuador': 'ec',
+        'paises bajos': 'nl', 'japon': 'jp', 'tunez': 'tn', 'noruega': 'no',
+        'belgica': 'be', 'egipto': 'eg', 'iran': 'ir', 'nueva zelanda': 'nz',
+        'espana': 'es', 'cabo verde': 'cv', 'arabia saudi': 'sa', 'uruguay': 'uy',
+        'francia': 'fr', 'polonia': 'pl', 'senegal': 'sn',
+        'argentina': 'ar', 'croacia': 'hr', 'ghana': 'gh', 'panama': 'pa',
+        'portugal': 'pt', 'colombia': 'co', 'uzbekistan': 'uz', 'irak': 'iq',
+        'inglaterra': 'gb-eng', 'eslovaquia': 'sk', 'suecia': 'se', 'rd congo': 'cd', 'gales': 'gb-wls',
+        'argelia': 'dz', 'jordania': 'jo', 'austria': 'at'
+    };
+    
+    return overrideDict[nPais] || 'un';
+}
+
+/**
+ * Devuelve la URL de la bandera de un país (flagcdn.com).
+ * @param {string} pais
+ * @param {number} [size=64]
+ * @returns {string}
+ */
+function getBanderaUrl(pais, size = 64) {
+    const codigo = getBanderaCodigo(pais);
+    return `https://flagcdn.com/w${size}/${codigo}.png`;
 }

@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función para verificar si el usuario logueado es Admin
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email != null && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+
+    // Colección de administradores (solo se edita desde la consola de Firebase)
+    match /admins/{email} {
+      allow read: if request.auth != null && request.auth.token.email == email;
+      allow write: if false;
+    }
+
+    // Partidos: Lectura pública (el frontend la necesita), escritura solo admin
+    match /partidos/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Predicciones (Prode Pueblo): Públicas para ranking, borrar solo admin
+    match /predicciones/{docId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isAdmin();
+    }
+
+    // Predicciones (Mundial): Públicas para ranking, borrar solo admin
+    match /predicciones_mundial/{docId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isAdmin();
+    }
+
+    // Usuarios: Compatibilidad para registros
+    match /usuarios/{docId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isAdmin();
+    }
+
+    // Configuración general y estado del torneo
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Configuración general y estado del torneo (Alias)
+    match /configuracion/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Historial de Fechas (Resultados históricos)
+    match /historial_fechas/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Logs de auditoría admin
+    match /admin_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Regla por defecto de seguridad - PROTECCIÓN ESTRICTA
+    // Cualquier otra colección no definida explícitamente requerirá ser Admin
+    // Mundial 2026: resultados oficiales, tablas y bracket publicado
+    match /mundial_matches/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /mundial_standings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /mundial_bracket/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /mundial_bonus/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
