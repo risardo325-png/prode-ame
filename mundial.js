@@ -20,7 +20,7 @@ const BANDERAS_MW = {
   'Francia':'🇫🇷','Senegal':'🇸🇳','Polonia':'🇵🇱','Panamá':'🇵🇦','Noruega':'🇳🇴',
   'Argentina':'🇦🇷','Argelia':'🇩🇿','Austria':'🇦🇹','Jordania':'🇯🇴',
   'Portugal':'🇵🇹','Colombia':'🇨🇴','Uzbekistán':'🇺🇿','Irak':'🇮🇶',
-  'Inglaterra':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Croacia':'🇭🇷','Ghana':'🇬🇭',
+  'Inglaterra':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Croacia':'🇭🇷','Ghana':'🇬🇭','RD Congo':'🇨🇩',
 };
 function bMW(p) { return BANDERAS_MW[p] || '🏳️'; }
 
@@ -86,12 +86,12 @@ const MUNDIAL_PARTIDOS = [
   {id:'J4',grupo:'J',jornada:2,local:'Jordania',visitante:'Argelia',fecha:'2026-06-23T01:00',sede:'San Francisco'},
   {id:'J5',grupo:'J',jornada:3,local:'Argelia',visitante:'Austria',fecha:'2026-06-27T23:00',sede:'Kansas City'},
   {id:'J6',grupo:'J',jornada:3,local:'Jordania',visitante:'Argentina',fecha:'2026-06-27T23:00',sede:'Dallas'},
-  {id:'K1',grupo:'K',jornada:1,local:'Portugal',visitante:'Irak',fecha:'2026-06-17T16:00',sede:'Los Ángeles'},
+  {id:'K1',grupo:'K',jornada:1,local:'Portugal',visitante:'RD Congo',fecha:'2026-06-17T16:00',sede:'Los Ángeles'},
   {id:'K2',grupo:'K',jornada:1,local:'Colombia',visitante:'Uzbekistán',fecha:'2026-06-17T22:00',sede:'Boston'},
   {id:'K3',grupo:'K',jornada:2,local:'Portugal',visitante:'Colombia',fecha:'2026-06-23T16:00',sede:'Seattle'},
-  {id:'K4',grupo:'K',jornada:2,local:'Uzbekistán',visitante:'Irak',fecha:'2026-06-23T22:00',sede:'Nueva Jersey'},
+  {id:'K4',grupo:'K',jornada:2,local:'Uzbekistán',visitante:'RD Congo',fecha:'2026-06-23T22:00',sede:'Nueva Jersey'},
   {id:'K5',grupo:'K',jornada:3,local:'Uzbekistán',visitante:'Portugal',fecha:'2026-06-28T20:00',sede:'Ciudad de México'},
-  {id:'K6',grupo:'K',jornada:3,local:'Irak',visitante:'Colombia',fecha:'2026-06-28T20:00',sede:'Houston'},
+  {id:'K6',grupo:'K',jornada:3,local:'RD Congo',visitante:'Colombia',fecha:'2026-06-28T20:00',sede:'Houston'},
   {id:'L1',grupo:'L',jornada:1,local:'Inglaterra',visitante:'Croacia',fecha:'2026-06-17T19:00',sede:'Nueva Jersey'},
   {id:'L2',grupo:'L',jornada:1,local:'Ghana',visitante:'Panamá',fecha:'2026-06-18T01:00',sede:'Kansas City'},
   {id:'L3',grupo:'L',jornada:2,local:'Croacia',visitante:'Ghana',fecha:'2026-06-23T19:00',sede:'Los Ángeles'},

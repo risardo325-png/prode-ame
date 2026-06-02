@@ -150,7 +150,7 @@ const TORNEOS_CONFIG = {
             H: ['España', 'Cabo Verde', 'Arabia Saudí', 'Uruguay'],
             I: ['Francia', 'Irak', 'Noruega', 'Senegal'],
             J: ['Argentina', 'Croacia', 'Ghana', 'Panamá'],
-            K: ['Portugal', 'Colombia', 'Uzbekistán', 'Irak'],
+            K: ['Portugal', 'Colombia', 'Uzbekistán', 'RD Congo'],
             L: ['Inglaterra', 'Eslovaquia', 'Suecia', 'RD Congo'],
         },
 
