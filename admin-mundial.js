@@ -14,6 +14,7 @@
     results: {},
     estados: {},
     bonusOficial: {},
+    configEstado: {},
     usuarios: [],
     standings: {},
     bracketBase: [],
@@ -58,6 +59,7 @@
     $('admin-worldcup-generate-bracket')?.addEventListener('click', generateOfficialBracket);
     $('admin-worldcup-publish-bracket')?.addEventListener('click', publishBracket);
     $('admin-save-bonus')?.addEventListener('click', saveOfficialBonus);
+    $('admin-mundial-ignore-time')?.addEventListener('change', saveIgnoreTime);
     $('admin-worldcup-filter-group')?.addEventListener('change', renderMatches);
     $('admin-worldcup-filter-state')?.addEventListener('change', renderMatches);
     $('admin-worldcup-user-search')?.addEventListener('input', renderPredictions);
@@ -128,11 +130,12 @@
   async function loadOnce() {
     setStatus('Cargando...');
     try {
-      const [matchesDoc, usersSnap, bracketDoc, bonusDoc] = await Promise.all([
+      const [matchesDoc, usersSnap, bracketDoc, bonusDoc, configDoc] = await Promise.all([
         db.collection('mundial_matches').doc('oficial').get(),
         db.collection('predicciones_mundial').get(),
         db.collection('mundial_bracket').doc('oficial').get(),
-        db.collection('mundial_bonus').doc('oficial').get()
+        db.collection('mundial_bonus').doc('oficial').get(),
+        db.collection('config').doc('estado_mundial').get()
       ]);
       if (matchesDoc.exists) {
         state.results = matchesDoc.data().resultados || {};
@@ -153,6 +156,9 @@
         if (bGA) bGA.value = state.bonusOficial.goleadorArg || '';
         if (bV) bV.value = state.bonusOficial.valla || '';
       }
+      state.configEstado = configDoc.exists ? configDoc.data() : {};
+      const chk = $('admin-mundial-ignore-time');
+      if (chk) chk.checked = Boolean(state.configEstado.ignorarHorario);
       rebuildStandings();
       renderAll();
       console.log('[Admin Mundial] Predicciones:', state.usuarios.length);
@@ -826,6 +832,22 @@
     } finally {
       btn.disabled = false;
       btn.textContent = 'Guardar Oficiales';
+    }
+  }
+
+  async function saveIgnoreTime(event) {
+    const active = event.target.checked;
+    try {
+      await db.collection('config').doc('estado_mundial').set(
+        { ignorarHorario: active },
+        { merge: true }
+      );
+      state.configEstado = { ...state.configEstado, ignorarHorario: active };
+      log(`Ventana de carga manual: ${active ? 'ACTIVADA' : 'desactivada'}`);
+    } catch (e) {
+      console.error('[Firebase Error]', e);
+      alert('No se pudo guardar la configuracion.');
+      event.target.checked = !active; // revertir en caso de error
     }
   }
 
