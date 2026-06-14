@@ -554,14 +554,25 @@ async function enviarPredicciones() {
 async function cargarRanking() {
     const rankingDiv = document.getElementById('ranking-list');
     try {
-        const snapshot = await queryTorneo('usuarios').get();
+        // 🔧 FIX: leemos TODA la colección sin filtro de torneo para no
+        // excluir usuarios viejos que no tienen el campo "torneo" guardado.
+        // Luego filtramos en JS: incluimos los que no tienen campo torneo
+        // (registros históricos) y los que tienen torneo == 'pueblo'.
+        const snapshot = await db.collection('usuarios').get();
+
         if (snapshot.empty) {
             rankingDiv.innerHTML = '<p>Aún no hay participantes.</p>';
             return;
         }
 
         let users = [];
-        snapshot.forEach(doc => users.push(doc.data()));
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Incluir usuarios sin campo torneo (viejos) O con torneo == 'pueblo'
+            if (!data.torneo || data.torneo === 'pueblo') {
+                users.push(data);
+            }
+        });
 
         // 🔑 FILTRAR: aparecen en el ranking si tienen pago confirmado O puntos acumulados
         const usersConPago = users.filter(u => u.pagoConfirmado === true || (u.puntos || 0) > 0);
