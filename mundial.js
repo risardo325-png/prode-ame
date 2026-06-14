@@ -1028,8 +1028,8 @@ async function cargarRankingMundial() {
           </div>`;
       }
 
-      // Top 10
-      const top = users.slice(0, 10);
+      // Todos los usuarios
+      const top = users;
       let html = '';
       top.forEach((u, i) => {
         const pos = i + 1;
