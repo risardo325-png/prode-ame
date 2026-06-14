@@ -2572,65 +2572,6 @@ async function enviarPronosticosMundial() {
     }
 }
 
-/**
- * Carga y muestra el ranking del Mundial desde pronosticos_grupos.
- */
-async function cargarRankingMundial() {
-    const div = document.getElementById('mundial-ranking-list');
-    if (!div) return;
-    try {
-        const snap = await db.collection('pronosticos_grupos')
-            .where('torneo', '==', 'mundial')
-            .orderBy('puntos', 'desc')
-            .get();
-
-        if (snap.empty) {
-            div.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:1rem;">Aún no hay participantes.</p>';
-            return;
-        }
-
-        let users = [];
-        snap.forEach(d => users.push(d.data()));
-        users.sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
-
-        let html = '';
-        users.forEach((u, i) => {
-            const pos = i + 1;
-            const posEmoji = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : pos;
-            const topClass = pos <= 3 ? `ranking-top${pos}` : '';
-            html += `
-                <div class="ranking-item ${topClass}">
-                    <div class="ranking-pos">${posEmoji}</div>
-                    <div class="ranking-name">${u.nombre}</div>
-                    <div class="ranking-pts">
-                        <span class="pts-number">${u.puntos || 0}</span>
-                        <span class="pts-exactos">pts</span>
-                    </div>
-                </div>
-            `;
-        });
-        div.innerHTML = html;
-    } catch(err) {
-        console.error('Error ranking mundial:', err);
-        // Si falla por índice faltante, intentar sin orderBy
-        try {
-            const snap2 = await db.collection('pronosticos_grupos').where('torneo', '==', 'mundial').get();
-            let users = [];
-            snap2.forEach(d => users.push(d.data()));
-            users.sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
-            if (users.length === 0) { div.innerHTML = '<p>Aún no hay participantes.</p>'; return; }
-            let html = '';
-            users.forEach((u, i) => {
-                const pos = i + 1;
-                const posEmoji = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : pos;
-                html += `<div class="ranking-item"><div class="ranking-pos">${posEmoji}</div><div class="ranking-name">${u.nombre}</div><div class="ranking-pts"><span class="pts-number">${u.puntos || 0}</span><span class="pts-exactos">pts</span></div></div>`;
-            });
-            div.innerHTML = html;
-        } catch(e2) {
-            div.innerHTML = '<p>Error al cargar ranking.</p>';
-        }
-    }
-}
 
 // ==========================================
 // ===== ADMIN — MUNDIAL 2026 GRUPOS ========
