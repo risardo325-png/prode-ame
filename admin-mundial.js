@@ -730,14 +730,14 @@
       if (Number(pred.gl) === Number(real.gl) && Number(pred.gv) === Number(real.gv)) pts += 4;
       else if (sign(pred.gl, pred.gv) === sign(real.gl, real.gv)) pts += 1;
     });
-    const values = { R32: 2, R16: 3, QF: 5, SF: 7, F: 10 };
+    const values = { R32: 10, R16: 20, QF: 20, SF: 30, F: 50 };
     Object.keys(values).forEach(round => {
       const count = ROUNDS.find(r => r.id === round).count;
       for (let i = 0; i < count; i++) {
         if (u.knockout?.[`${round}_${i}`] && u.knockout[`${round}_${i}`] === state.knockout[`${round}_${i}`]) pts += values[round];
       }
     });
-    if (u.knockout?.CHAMPION && u.knockout.CHAMPION === state.knockout.CHAMPION) pts += 15;
+    if (u.knockout?.CHAMPION && u.knockout.CHAMPION === state.knockout.CHAMPION) pts += 100;
 
     // === BONUS ===
     const BONUS_GOLEADOR = 35;
