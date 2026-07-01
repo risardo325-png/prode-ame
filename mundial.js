@@ -669,7 +669,7 @@ function mwGenerarCrucesR32(clasificacion) {
       .map(g => thirdByGroup[g])
       .filter(Boolean)
       .filter(t => !used.has(t.grupo))
-      .sort((a, b) => a.thirdRank - b.thirdRank);
+      .sort((a, b) => a.grupo.localeCompare(b.grupo));
     for (const team of candidates) {
       assignment[slot.idx] = team;
       used.add(team.grupo);
