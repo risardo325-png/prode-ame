@@ -720,6 +720,10 @@
     }
   }
 
+  function isValidScore(value) {
+    return value !== '' && value !== null && value !== undefined && Number.isFinite(Number(value));
+  }
+
   function calculateUserPoints(u) {
     let pts = 0;
     Object.keys(state.results).forEach(id => {
@@ -727,47 +731,36 @@
       const real = state.results[id];
       const pred = (u.partidos || {})[id];
       if (!real || !pred) return;
+      if (!isValidScore(pred.gl) || !isValidScore(pred.gv) || !isValidScore(real.gl) || !isValidScore(real.gv)) return;
       if (Number(pred.gl) === Number(real.gl) && Number(pred.gv) === Number(real.gv)) pts += 4;
       else if (sign(pred.gl, pred.gv) === sign(real.gl, real.gv)) pts += 1;
     });
 
     // === FASES ELIMINATORIAS ===
     // Puntaje por EQUIPO ACERTADO en la ronda, sin importar el slot/posicion del bracket.
-    // Semantica confirmada en mundial.js (renderMatchContent / mwAvanzarEquipo):
-    //   R32_i = equipo que gana su partido de 16avos y avanza a Octavos  -> 10 pts
-    //   R16_i = equipo que gana Octavos y avanza a Cuartos               -> 20 pts
-    //   QF_i  = equipo que gana Cuartos y avanza a Semifinal             -> 30 pts
-    //   SF_i  = equipo que gana Semifinal y es Finalista                 -> 50 pts
-    //   CHAMPION = campeon (ganador de 'F')                              -> 100 pts
-    // Cada equipo suma UNA sola vez por ronda (Set = sin duplicados), y la ronda 'F'
-    // no se puntua aparte porque su ganador es exactamente CHAMPION (evita doble conteo).
     const values = { R32: 10, R16: 20, QF: 30, SF: 50 };
     Object.keys(values).forEach(round => {
       const count = ROUNDS.find(r => r.id === round).count;
-
-      // Equipos reales de la ronda, normalizados y sin duplicados
+      
       const realTeams = new Set();
       for (let i = 0; i < count; i++) {
         const team = state.knockout[`${round}_${i}`];
-        if (team) realTeams.add(normalizeTeamName(team));
+        if (team) realTeams.add(teamKey(team));
       }
 
-      // Equipos elegidos por el usuario en la ronda, normalizados y sin duplicados
       const userTeams = new Set();
       for (let i = 0; i < count; i++) {
         const team = u.knockout?.[`${round}_${i}`];
-        if (team) userTeams.add(normalizeTeamName(team));
+        if (team) userTeams.add(teamKey(team));
       }
 
-      // Interseccion: cada equipo acertado suma una sola vez
       userTeams.forEach(team => {
         if (realTeams.has(team)) pts += values[round];
       });
     });
 
-    // Campeon: se evalua aparte (no forma parte del loop de 'values' de arriba)
     if (u.knockout?.CHAMPION && state.knockout?.CHAMPION &&
-        normalizeTeamName(u.knockout.CHAMPION) === normalizeTeamName(state.knockout.CHAMPION)) {
+        teamKey(u.knockout.CHAMPION) === teamKey(state.knockout.CHAMPION)) {
       pts += 100;
     }
 
@@ -796,12 +789,12 @@
     return Number(gl) > Number(gv) ? 'L' : Number(gl) < Number(gv) ? 'V' : 'E';
   }
 
-  // Normaliza nombres de equipo para comparar de forma robusta (mayus/minus, acentos, espacios).
-  // No existia un 'teamKey' en el proyecto; se agrega este helper minimo solo para el motor de puntos.
-  function normalizeTeamName(name) {
-    if (!name) return '';
-    return String(name)
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  function teamKey(team) {
+    return String(team ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
   }
