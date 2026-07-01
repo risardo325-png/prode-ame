@@ -560,7 +560,7 @@
         knockout: state.knockout,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: state.user?.email || ''
-      }, { merge: true });
+      });
       await db.collection('admin_logs').add({
         action: 'Publico bracket Mundial',
         adminEmail: state.user?.email || '',
@@ -702,13 +702,23 @@
   async function recalculateRanking() {
     if (!confirm('Recalcular puntos de todos los usuarios Mundial?')) return;
     try {
-      const batch = db.batch();
-      state.usuarios.forEach(u => {
-        const puntos = calculateUserPoints(u);
-        batch.update(db.collection('predicciones_mundial').doc(u.id), { puntos, recalculadoAt: firebase.firestore.FieldValue.serverTimestamp() });
-        u.puntos = puntos;
-      });
-      await batch.commit();
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < state.usuarios.length; i += CHUNK_SIZE) {
+        const batch = db.batch();
+        const chunk = state.usuarios.slice(i, i + CHUNK_SIZE);
+        
+        chunk.forEach(u => {
+          const puntos = calculateUserPoints(u);
+          batch.update(db.collection('predicciones_mundial').doc(u.id), { 
+            puntos, 
+            recalculadoAt: firebase.firestore.FieldValue.serverTimestamp() 
+          });
+          u.puntos = puntos;
+        });
+        
+        await batch.commit();
+      }
+      
       console.log('[Ranking] Recalculado');
       log('Ranking Mundial recalculado');
       renderDashboard();
