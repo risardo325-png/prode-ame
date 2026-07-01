@@ -727,26 +727,20 @@
       const real = state.results[id];
       const pred = (u.partidos || {})[id];
       if (!real || !pred) return;
+      if (!isValidScore(pred.gl) || !isValidScore(pred.gv) || !isValidScore(real.gl) || !isValidScore(real.gv)) return;
       if (Number(pred.gl) === Number(real.gl) && Number(pred.gv) === Number(real.gv)) pts += 4;
       else if (sign(pred.gl, pred.gv) === sign(real.gl, real.gv)) pts += 1;
     });
-
-    // === FASES ELIMINATORIAS ===
-    // Comparacion por CONJUNTO: si el equipo esta en la ronda (sin importar slot), suma
-    // R32: 8vos (10pts), R16: 4tos (20pts), QF: Semis (30pts), SF: Finalistas (50pts)
     const values = { R32: 10, R16: 20, QF: 30, SF: 50 };
     Object.keys(values).forEach(round => {
-      const count = ROUNDS.find(r => r.id === round).count;
-      const realTeams = new Set();
-      for (let i = 0; i < count; i++) {
-        if (state.knockout[`${round}_${i}`]) realTeams.add(state.knockout[`${round}_${i}`]);
-      }
-      for (let i = 0; i < count; i++) {
-        const userTeam = u.knockout?.[`${round}_${i}`];
-        if (userTeam && realTeams.has(userTeam)) pts += values[round];
-      }
+      const userTeams = teamsByRound(u.knockout, round);
+      if (!userTeams.size) return;
+      const officialTeams = teamsByRound(state.knockout, round);
+      userTeams.forEach(team => {
+        if (officialTeams.has(team)) pts += values[round];
+      });
     });
-    if (u.knockout?.CHAMPION && u.knockout.CHAMPION === state.knockout.CHAMPION) pts += 100;
+    if (teamKey(u.knockout?.CHAMPION) && teamKey(u.knockout?.CHAMPION) === teamKey(state.knockout.CHAMPION)) pts += 100;
 
     // === BONUS ===
     const BONUS_GOLEADOR = 35;
@@ -767,6 +761,31 @@
     }
 
     return pts;
+  }
+
+  function teamsByRound(knockout = {}, round) {
+    const roundInfo = ROUNDS.find(r => r.id === round);
+    const teams = new Set();
+    if (!roundInfo) return teams;
+    for (let i = 0; i < roundInfo.count; i++) {
+      const key = teamKey(knockout?.[`${round}_${i}`]);
+      if (key) teams.add(key);
+    }
+    return teams;
+  }
+
+  function teamKey(team) {
+    return String(team ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  function isValidScore(value) {
+    return value !== '' && value !== null && value !== undefined && Number.isFinite(Number(value));
   }
 
   function sign(gl, gv) {

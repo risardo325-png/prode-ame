@@ -30,7 +30,11 @@ service cloud.firestore {
     // Predicciones (Mundial): Públicas para ranking, borrar solo admin
     match /predicciones_mundial/{docId} {
       allow read: if true;
-      allow create, update: if true;
+      allow create: if isAdmin()
+        || !('puntos' in request.resource.data)
+        || request.resource.data.puntos == 0;
+      allow update: if isAdmin()
+        || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['puntos', 'recalculadoAt']);
       allow delete: if isAdmin();
     }
 

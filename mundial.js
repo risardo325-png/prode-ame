@@ -403,6 +403,13 @@ function mwRecolectarPreds(soloAbiertos = false) {
   return partidos;
 }
 
+function mwRecolectarBonus() {
+  const bG = document.getElementById('mw-bonus-goleador')?.value?.trim() || '';
+  const bGA = document.getElementById('mw-bonus-goleador-arg')?.value?.trim() || '';
+  const bV = document.getElementById('mw-bonus-valla')?.value?.trim() || '';
+  return { goleador: bG, goleadorArg: bGA, valla: bV };
+}
+
 // ── AUTOGUARDADO ──────────────────────────────────────────────
 async function mwAutoGuardar() {
   const wa = document.getElementById('mw-whatsapp')?.value?.trim();
@@ -416,11 +423,8 @@ async function mwAutoGuardar() {
 
   const partidos = mwRecolectarPreds();
   
-  // Recolectar bonus
-  const bG = document.getElementById('mw-bonus-goleador')?.value?.trim() || '';
-  const bGA = document.getElementById('mw-bonus-goleador-arg')?.value?.trim() || '';
-  const bV = document.getElementById('mw-bonus-valla')?.value?.trim() || '';
-  _mwBonus = { goleador: bG, goleadorArg: bGA, valla: bV };
+  _mwBonus = mwRecolectarBonus();
+  const { goleador: bG, goleadorArg: bGA, valla: bV } = _mwBonus;
 
   if (Object.keys(partidos).length === 0 && Object.keys(_mwKnockout).length === 0 && !bG && !bGA && !bV) return;
 
@@ -432,7 +436,7 @@ async function mwAutoGuardar() {
     
     localStorage.setItem(`prode_mundial_${wa}`, JSON.stringify({
       nombre, whatsapp: wa, torneo: 'mundial', partidos, knockout: _mwKnockout, bonus: _mwBonus,
-      puntos: 0, metadata, fechaActualizacion: new Date().toISOString()
+      puntos: 0, fechaActualizacion: new Date().toISOString()
     }));
     _mwPredsGuardadas = partidos;
     sessionStorage.setItem('mundial_wa', wa);
@@ -450,6 +454,7 @@ window.enviarPrediccionesMundial = async function() {
 
   const ahora = Date.now();
   const partidos = mwRecolectarPreds();
+  _mwBonus = mwRecolectarBonus();
   let incompletos = [];
 
   MUNDIAL_PARTIDOS.forEach(p => {
@@ -485,7 +490,7 @@ window.enviarPrediccionesMundial = async function() {
     };
 
     const payload = {
-      nombre, whatsapp: wa, torneo: 'mundial', partidos, knockout: _mwKnockout, bonus: _mwBonus, puntos: 0,
+      nombre, whatsapp: wa, torneo: 'mundial', partidos, knockout: _mwKnockout, bonus: _mwBonus,
       metadata,
       fechaActualizacion: firebase.firestore.FieldValue.serverTimestamp(),
     };
@@ -503,6 +508,7 @@ window.enviarPrediccionesMundial = async function() {
       await db.collection('predicciones_mundial').doc(_mwUsuarioId).set(payload, { merge: true });
     } else {
       payload.fechaRegistro = firebase.firestore.FieldValue.serverTimestamp();
+      payload.puntos = 0;
       const ref = await db.collection('predicciones_mundial').add(payload);
       _mwUsuarioId = ref.id;
     }
