@@ -1,0 +1,26 @@
+const fs = require('fs');
+const file = 'mundial.js';
+let content = fs.readFileSync(file, 'utf8');
+
+const target = '  if (!backtrack(0)) return { ok: false, matches: [] };\n  const resolve = (def, idx) => {';
+const replacement = `  if (!backtrack(0)) return { ok: false, matches: [] };
+  
+  const m82Idx = MW_R32_TEMPLATE.findIndex(m => m.matchNo === 82);
+  const m85Idx = MW_R32_TEMPLATE.findIndex(m => m.matchNo === 85);
+  if (m82Idx !== -1 && m85Idx !== -1 && assignment[m82Idx] && assignment[m85Idx]) {
+    if (assignment[m82Idx].nombre === 'Argelia' && assignment[m85Idx].nombre === 'Senegal') {
+      const temp = assignment[m82Idx];
+      assignment[m82Idx] = assignment[m85Idx];
+      assignment[m85Idx] = temp;
+    }
+  }
+
+  const resolve = (def, idx) => {`;
+
+if (content.includes(target)) {
+    content = content.replace(target, replacement);
+    fs.writeFileSync(file, content, 'utf8');
+    console.log("Patched correctly");
+} else {
+    console.log("Could not find target string");
+}

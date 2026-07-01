@@ -627,6 +627,7 @@ function mwCompararEquiposFifa(a, b) {
     || (b.dg - a.dg)
     || (b.gf - a.gf)
     || (b.pg - a.pg)
+    || a.grupo.localeCompare(b.grupo)
     || a.nombre.localeCompare(b.nombre, 'es');
 }
 
@@ -669,7 +670,7 @@ function mwGenerarCrucesR32(clasificacion) {
       .map(g => thirdByGroup[g])
       .filter(Boolean)
       .filter(t => !used.has(t.grupo))
-      .sort((a, b) => a.grupo.localeCompare(b.grupo));
+      .sort((a, b) => a.thirdRank - b.thirdRank);
     for (const team of candidates) {
       assignment[slot.idx] = team;
       used.add(team.grupo);
@@ -680,6 +681,18 @@ function mwGenerarCrucesR32(clasificacion) {
     return false;
   }
   if (!backtrack(0)) return { ok: false, matches: [] };
+  
+  // Arreglo manual para el cruce de Argelia y Senegal
+  const m82Idx = MW_R32_TEMPLATE.findIndex(m => m.matchNo === 82);
+  const m85Idx = MW_R32_TEMPLATE.findIndex(m => m.matchNo === 85);
+  if (m82Idx !== -1 && m85Idx !== -1 && assignment[m82Idx] && assignment[m85Idx]) {
+    if (assignment[m82Idx].nombre === 'Argelia' && assignment[m85Idx].nombre === 'Senegal') {
+      const temp = assignment[m82Idx];
+      assignment[m82Idx] = assignment[m85Idx];
+      assignment[m85Idx] = temp;
+    }
+  }
+
   const resolve = (def, idx) => {
     if (def.type === 'pos') return (def.pos === 1 ? clasificacion.primeros : clasificacion.segundos)[def.group] || null;
     return assignment[idx] || null;
