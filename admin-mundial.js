@@ -732,12 +732,18 @@
     });
 
     // === FASES ELIMINATORIAS ===
-    // R32: pasan a 8vos (10pts), R16: 4tos (20pts), QF: Semis (30pts), SF: Finalistas (50pts)
+    // Comparacion por CONJUNTO: si el equipo esta en la ronda (sin importar slot), suma
+    // R32: 8vos (10pts), R16: 4tos (20pts), QF: Semis (30pts), SF: Finalistas (50pts)
     const values = { R32: 10, R16: 20, QF: 30, SF: 50 };
     Object.keys(values).forEach(round => {
       const count = ROUNDS.find(r => r.id === round).count;
+      const realTeams = new Set();
       for (let i = 0; i < count; i++) {
-        if (u.knockout?.[`${round}_${i}`] && u.knockout[`${round}_${i}`] === state.knockout[`${round}_${i}`]) pts += values[round];
+        if (state.knockout[`${round}_${i}`]) realTeams.add(state.knockout[`${round}_${i}`]);
+      }
+      for (let i = 0; i < count; i++) {
+        const userTeam = u.knockout?.[`${round}_${i}`];
+        if (userTeam && realTeams.has(userTeam)) pts += values[round];
       }
     });
     if (u.knockout?.CHAMPION && u.knockout.CHAMPION === state.knockout.CHAMPION) pts += 100;
