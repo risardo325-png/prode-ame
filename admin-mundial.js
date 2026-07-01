@@ -730,24 +730,10 @@
       if (Number(pred.gl) === Number(real.gl) && Number(pred.gv) === Number(real.gv)) pts += 4;
       else if (sign(pred.gl, pred.gv) === sign(real.gl, real.gv)) pts += 1;
     });
-    // === CLASIFICADOS DE GRUPOS (10 pts por cada equipo que clasifica correctamente) ===
-    if (state.bracketBase && state.bracketBase.length) {
-      const realClasificados = new Set();
-      state.bracketBase.forEach(match => {
-        if (match.eq1?.nombre) realClasificados.add(match.eq1.nombre);
-        if (match.eq2?.nombre) realClasificados.add(match.eq2.nombre);
-      });
-      try {
-        const userStandings = MundialBracketEngine.calcularTablas(u.partidos || {});
-        const userClasif = MundialBracketEngine.resolverClasificados(userStandings);
-        (userClasif.clasificados || []).forEach(eq => {
-          if (eq?.nombre && realClasificados.has(eq.nombre)) pts += 10;
-        });
-      } catch (e) { /* si no se puede calcular, no sumar */ }
-    }
 
-    // === FASES ELIMINATORIAS (R16 en adelante) ===
-    const values = { R16: 20, QF: 20, SF: 30, F: 50 };
+    // === FASES ELIMINATORIAS ===
+    // R32: pasan a 8vos (10pts), R16: 4tos (20pts), QF: Semis (30pts), SF: Finalistas (50pts)
+    const values = { R32: 10, R16: 20, QF: 30, SF: 50 };
     Object.keys(values).forEach(round => {
       const count = ROUNDS.find(r => r.id === round).count;
       for (let i = 0; i < count; i++) {
