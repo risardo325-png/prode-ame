@@ -477,8 +477,11 @@
       const base = state.bracketBase[index] || {};
       return [base.eq1?.nombre || base.eq1, base.eq2?.nombre || base.eq2].filter(Boolean);
     }
-    const prev = roundId === 'R16' ? 'R32' : roundId === 'QF' ? 'R16' : roundId === 'SF' ? 'QF' : 'SF';
-    return [state.knockout[`${prev}_${index * 2}`], state.knockout[`${prev}_${index * 2 + 1}`]].filter(Boolean);
+    const currentMatchKey = `${roundId}_${index}`;
+    const feederKeys = MundialBracketEngine.getFeederKeys(currentMatchKey);
+    const pMatch1 = feederKeys[0];
+    const pMatch2 = feederKeys[1];
+    return [state.knockout[pMatch1], state.knockout[pMatch2]].filter(Boolean);
   }
 
   function renderTeamButton(team, roundId, index, selected) {
@@ -490,19 +493,22 @@
   }
 
   function advance(roundId, index, team) {
-    state.knockout[`${roundId}_${index}`] = team;
-    const progression = ['R32', 'R16', 'QF', 'SF', 'F'];
-    let currentIndex = index;
-    for (let i = progression.indexOf(roundId) + 1; i < progression.length; i++) {
-      currentIndex = Math.floor(currentIndex / 2);
-      delete state.knockout[`${progression[i]}_${currentIndex}`];
+    const key = `${roundId}_${index}`;
+    state.knockout[key] = team;
+    
+    // Limpiar ramas futuras usando el mapa compartido
+    let currentKey = key;
+    while (currentKey && currentKey !== 'CHAMPION') {
+      const nextKey = MundialBracketEngine.BRACKET_PROGRESSION[currentKey];
+      if (nextKey) {
+        delete state.knockout[nextKey];
+      }
+      currentKey = nextKey;
     }
     delete state.knockout.CHAMPION;
     if (roundId === 'F') state.knockout.CHAMPION = team;
 
     // ── Actualizar solo las tarjetas afectadas (sin re-render completo) ──
-    // Reconstruir la tarjeta del partido tocado y los partidos siguientes
-    // que dependen de esta rama. Si alguno no existe en DOM, hacer render completo.
     const scroller = $('admin-worldcup-bracket-scroll');
     const savedLeft = scroller ? scroller.scrollLeft : 0;
     const savedTop  = scroller ? scroller.scrollTop  : 0;
@@ -519,17 +525,19 @@
 
     if (!needFullRender) {
       // Partidos siguientes en la rama
-      let ci = index;
-      for (let i = progression.indexOf(roundId) + 1; i < progression.length; i++) {
-        ci = Math.floor(ci / 2);
-        const nextRound = progression[i];
-        const nextEl = document.getElementById(`awc-match-${nextRound}-${ci}`);
+      let currentKey = key;
+      while (currentKey) {
+        const nextKey = MundialBracketEngine.BRACKET_PROGRESSION[currentKey];
+        if (!nextKey || nextKey === 'CHAMPION') break;
+        const [nextRound, nextIndex] = nextKey.split('_');
+        const nextEl = document.getElementById(`awc-match-${nextRound}-${nextIndex}`);
         if (nextEl) {
-          nextEl.innerHTML = renderBracketMatch(nextRound, ci);
+          nextEl.innerHTML = renderBracketMatch(nextRound, parseInt(nextIndex));
         } else {
           needFullRender = true;
           break;
         }
+        currentKey = nextKey;
       }
       // Actualizar campeón
       const champRound = document.querySelector('.admin-worldcup-round:last-child .admin-worldcup-bracket-match');

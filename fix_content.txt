@@ -1,0 +1,274 @@
+  // Arreglo manual para el cruce de Argelia y Senegal
+  const m82Idx = MW_R32_TEMPLATE.findIndex(m => m.matchNo === 82);
+  const m85Idx = MW_R32_TEMPLATE.findIndex(m => m.matchNo === 85);
+  if (m82Idx !== -1 && m85Idx !== -1 && assignment[m82Idx] && assignment[m85Idx]) {
+    if (assignment[m82Idx].nombre === 'Argelia' && assignment[m85Idx].nombre === 'Senegal') {
+      const temp = assignment[m82Idx];
+      assignment[m82Idx] = assignment[m85Idx];
+      assignment[m85Idx] = temp;
+    }
+  }
+
+  const resolve = (def, idx) => {
+    if (def.type === 'pos') return (def.pos === 1 ? clasificacion.primeros : clasificacion.segundos)[def.group] || null;
+    return assignment[idx] || null;
+  };
+  return {
+    ok: true,
+    matches: MW_R32_TEMPLATE.map((m, idx) => ({
+      matchNo: m.matchNo,
+      eq1: resolve(m.eq1, idx),
+      eq2: resolve(m.eq2, idx),
+      label: `M${m.matchNo}`
+    }))
+  };
+}
+
+window.MundialBracketEngine = {
+  calcularTablas: mwCalcularTablasDesdeResultados,
+  resolverClasificados: mwResolverClasificados,
+  generarCrucesR32: mwGenerarCrucesR32,
+  template: MW_R32_TEMPLATE
+};
+
+// ── BRACKET SCROLL: instalar rueda del mouse → scroll horizontal ──
+function _mwInstallBracketWheelScroll(container) {
+  if (container._mwWheelBound) return;
+  container._mwWheelBound = true;
+  container.addEventListener('wheel', function(e) {
+    if (window.matchMedia('(max-width: 768px)').matches) return;
+
+    const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (!delta) return;
+
+    const root = document.scrollingElement || document.documentElement;
+    const maxScrollTop = Math.max(0, root.scrollHeight - root.clientHeight);
+    const pageAtVerticalLimit = delta < 0 ? root.scrollTop <= 0 : root.scrollTop >= maxScrollTop - 1;
+    const atLeft = container.scrollLeft <= 0;
+    const atRight = container.scrollLeft + container.clientWidth >= container.scrollWidth - 1;
+    const canMoveHorizontally = delta < 0 ? !atLeft : !atRight;
+
+    if ((!e.shiftKey && !pageAtVerticalLimit) || !canMoveHorizontally) return;
+
+    e.preventDefault();
+    container.scrollLeft += delta;
+  }, { passive: false });
+}
+
+function _mwRenderBracketStructureLegacy() {
+  const container = document.getElementById('mw-bracket-container');
+  if (!container) return;
+
+  // ── PRESERVAR SCROLL antes del render ──────────────────────────
+  const savedScrollLeft = container.scrollLeft;
+  const savedScrollTop  = container.scrollTop;
+
+  const RONDAS = [
+    { id: 'R32', name: '16avos', count: 16 },
+    { id: 'R16', name: 'Octavos', count: 8 },
+    { id: 'QF', name: 'Cuartos', count: 4 },
+    { id: 'SF', name: 'Semis', count: 2 },
+    { id: 'F', name: 'Final', count: 1 }
+  ];
+
+  let html = `<div class="mw-bracket">`;
+  
+  RONDAS.forEach((ronda) => {
+    html += `<div class="mw-bracket-round mw-round-${ronda.id}">`;
+    html += `<div class="mw-round-title">${ronda.name}</div>`;
+    
+    for (let i = 0; i < ronda.count; i++) {
+      html += `
+        <div class="mw-match-wrapper">
+          <div class="mw-match" id="match-${ronda.id}-${i}">
+             ${renderMatchContent(ronda.id, i)}
+          </div>
+        </div>`;
+    }
+    html += `</div>`;
+  });
+
+  // Champion Box
+  const champ = _mwKnockout['CHAMPION'];
+  html += `
+    <div class="mw-bracket-round mw-round-CHAMPION">
+      <div class="mw-round-title" style="color: var(--primary);">Campeón</div>
+      <div class="mw-champion-card ${champ ? 'active' : ''}" id="match-CHAMPION-0">
+        ${champ ? `
+          <div class="mw-champion-glow"></div>
+          <span style="font-size: 2rem;">🏆</span>
+          <img src="${getBanderaUrl(champ, 60)}" style="width:60px; border-radius:50%; border: 3px solid var(--primary); margin: 0.5rem 0; box-shadow: 0 0 15px rgba(212,175,55,0.5);">
+          <span style="font-size: 1.2rem; font-weight: bold; color: #fff;">${champ}</span>
+        ` : `
+          <span style="font-size: 2rem; opacity: 0.5;">🏆</span>
+          <span style="color: var(--text-muted); font-size: 0.9rem;">Esperando Campeón</span>
+        `}
+      </div>
+    </div>
+  `;
+
+  html += `</div>`;
+  container.innerHTML = html;
+
+  // ── RESTAURAR SCROLL después del render ────────────────────────
+  // requestAnimationFrame garantiza que el DOM ya está pintado
+  requestAnimationFrame(() => {
+    container.scrollLeft = savedScrollLeft;
+    container.scrollTop  = savedScrollTop;
+  });
+
+  // ── Rueda del mouse → scroll horizontal ───────────────────────
+  _mwInstallBracketWheelScroll(container);
+}
+
+function renderBracketStructure() {
+  const container = document.getElementById('mw-bracket-container');
+  if (!container) return;
+
+  const savedScrollLeft = container.scrollLeft;
+  const savedScrollTop  = container.scrollTop;
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+  const openMobileRounds = Array.from(container.querySelectorAll('.mw-mobile-round[open]')).map(el => el.dataset.round);
+
+  const RONDAS = [
+    { id: 'R32', name: '16avos', count: 16 },
+    { id: 'R16', name: 'Octavos', count: 8 },
+    { id: 'QF', name: 'Cuartos', count: 4 },
+    { id: 'SF', name: 'Semis', count: 2 },
+    { id: 'F', name: 'Final', count: 1 }
+  ];
+
+  const champ = _mwKnockout['CHAMPION'];
+  const championHtml = `
+    <div class="mw-bracket-round mw-round-CHAMPION">
+      <div class="mw-round-title" style="color: var(--primary);">Campeón</div>
+      <div class="mw-champion-card ${champ ? 'active' : ''}" id="match-CHAMPION-0">
+        ${champ ? `
+          <div class="mw-champion-glow"></div>
+          <span style="font-size: 2rem;">🏆</span>
+          <img src="${getBanderaUrl(champ, 60)}" style="width:60px; border-radius:50%; border: 3px solid var(--primary); margin: 0.5rem 0; box-shadow: 0 0 15px rgba(212,175,55,0.5);">
+          <span style="font-size: 1.2rem; font-weight: bold; color: #fff;">${champ}</span>
+        ` : `
+          <span style="color: var(--text-muted); font-size: 0.9rem;">Esperando campeón</span>
+        `}
+      </div>
+    </div>
+  `;
+
+  let html = '';
+  if (isMobile) {
+    const hasOpenRounds = openMobileRounds.length > 0;
+    html = `<div class="mw-bracket-mobile">`;
+    RONDAS.forEach((ronda, rondaIndex) => {
+      const isOpen = hasOpenRounds ? openMobileRounds.includes(ronda.id) : rondaIndex === 0;
+      html += `
+        <details class="mw-mobile-round" data-round="${ronda.id}" ${isOpen ? 'open' : ''}>
+          <summary>
+            <span>${ronda.name}</span>
+            <small>${ronda.count} partidos</small>
+          </summary>
+          <div class="mw-mobile-round-matches">`;
+      for (let i = 0; i < ronda.count; i++) {
+        html += `
+          <div class="mw-match-wrapper">
+            <div class="mw-match" id="match-${ronda.id}-${i}">
+              ${renderMatchContent(ronda.id, i)}
+            </div>
+          </div>`;
+      }
+      html += `</div></details>`;
+    });
+    html += `<section class="mw-mobile-champion">${championHtml}</section></div>`;
+  } else {
+    html = `<div class="mw-bracket">`;
+    RONDAS.forEach((ronda) => {
+      html += `<div class="mw-bracket-round mw-round-${ronda.id}">`;
+      html += `<div class="mw-round-title">${ronda.name}</div>`;
+      for (let i = 0; i < ronda.count; i++) {
+        html += `
+          <div class="mw-match-wrapper">
+            <div class="mw-match" id="match-${ronda.id}-${i}">
+              ${renderMatchContent(ronda.id, i)}
+            </div>
+          </div>`;
+      }
+      html += `</div>`;
+    });
+    html += championHtml;
+    html += `</div>`;
+  }
+
+  container.innerHTML = html;
+  if (isMobile) {
+    container.querySelectorAll('.mw-mobile-round').forEach(detail => {
+      detail.addEventListener('toggle', () => {
+        if (!detail.open) return;
+        container.querySelectorAll('.mw-mobile-round').forEach(other => {
+          if (other !== detail) other.open = false;
+        });
+      });
+    });
+  }
+  requestAnimationFrame(() => {
+    container.scrollLeft = isMobile ? 0 : savedScrollLeft;
+    container.scrollTop = savedScrollTop;
+  });
+
+  if (!isMobile) _mwInstallBracketWheelScroll(container);
+}
+
+function renderMatchContent(rondaId, matchIndex) {
+  let eq1 = null;
+  let eq2 = null;
+
+  if (rondaId === 'R32') {
+    const initMatch = window._mwCurrentBracketTeams[matchIndex];
+    eq1 = initMatch?.eq1?.nombre || null;
+    eq2 = initMatch?.eq2?.nombre || null;
+  } else {
+    // Buscar en los ganadores de la ronda anterior
+    let prevRondaId;
+    if (rondaId === 'R16') prevRondaId = 'R32';
+    else if (rondaId === 'QF') prevRondaId = 'R16';
+    else if (rondaId === 'SF') prevRondaId = 'QF';
+    else if (rondaId === 'F') prevRondaId = 'SF';
+
+    const pMatch1 = prevRondaId + '_' + (matchIndex * 2);
+    const pMatch2 = prevRondaId + '_' + (matchIndex * 2 + 1);
+
+    eq1 = _mwKnockout[pMatch1] || null;
+    eq2 = _mwKnockout[pMatch2] || null;
+  }
+
+  const selected = _mwKnockout[`${rondaId}_${matchIndex}`];
+  
+  const renderTeam = (teamName, slot) => {
+    if (!teamName) {
+      return `
+        <button class="btn-prediccion-el empty" disabled>
+          <span class="empty-slot">?</span>
+        </button>
+      `;
+    }
+    
+    const isSelected = selected === teamName;
+    const isDefeated = selected && !isSelected;
+    const cls = `btn-prediccion-el ${isSelected ? 'selected' : ''} ${isDefeated ? 'defeated' : ''}`;
+    
+    return `
+      <button class="${cls}" onclick="mwAvanzarEquipo('${rondaId}', ${matchIndex}, '${teamName}')">
+        <img src="${getBanderaUrl(teamName, 40)}" class="team-flag">
+        <span class="team-name">${teamName}</span>
+      </button>
+    `;
+  };
+
+  return `
+    <div class="match-teams">
+      ${rondaId === 'R32' && window._mwCurrentBracketTeams?.[matchIndex]?.label ? `<div class="match-code">${window._mwCurrentBracketTeams[matchIndex].label}</div>` : ''}
+      ${renderTeam(eq1, 1)}
+      <div class="match-divider">VS</div>
+      ${renderTeam(eq2, 2)}
+    </div>
+  `;
+}

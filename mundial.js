@@ -653,14 +653,13 @@ function mwResolverClasificados(tabla) {
     clasificados: [...Object.values(primeros), ...Object.values(segundos), ...mejoresTerceros]
   };
 }
-
 function mwGenerarCrucesR32(clasificacion) {
   const thirdByGroup = {};
   clasificacion.terceros.forEach(t => { thirdByGroup[t.grupo] = t; });
   const slots = MW_R32_TEMPLATE
-    .map((m, idx) => ({ idx, def: m.eq2, candidates: m.eq2.type === 'third' ? m.eq2.candidates.filter(g => thirdByGroup[g]) : [] }))
+    .map((m, idx) => ({ idx, def: m.eq2, matchNo: m.matchNo, candidates: m.eq2.type === 'third' ? m.eq2.candidates.filter(g => thirdByGroup[g]) : [] }))
     .filter(s => s.def.type === 'third')
-    .sort((a, b) => a.candidates.length - b.candidates.length);
+    .sort((a, b) => (a.candidates.length - b.candidates.length) || (a.matchNo - b.matchNo));
   const used = new Set();
   const assignment = {};
   function backtrack(pos) {
@@ -681,7 +680,6 @@ function mwGenerarCrucesR32(clasificacion) {
     return false;
   }
   if (!backtrack(0)) return { ok: false, matches: [] };
-  
   // Arreglo manual para el cruce de Argelia y Senegal
   const m82Idx = MW_R32_TEMPLATE.findIndex(m => m.matchNo === 82);
   const m85Idx = MW_R32_TEMPLATE.findIndex(m => m.matchNo === 85);
@@ -708,12 +706,53 @@ function mwGenerarCrucesR32(clasificacion) {
   };
 }
 
+const BRACKET_PROGRESSION = {
+  // R32 -> R16
+  'R32_0': 'R16_0', 'R32_1': 'R16_0',
+  'R32_2': 'R16_1', 'R32_3': 'R16_1',
+  'R32_4': 'R16_2', 'R32_5': 'R16_2',
+  'R32_6': 'R16_3', 'R32_7': 'R16_3',
+  'R32_8': 'R16_4', 'R32_9': 'R16_4',
+  'R32_10': 'R16_5', 'R32_11': 'R16_5',
+  'R32_12': 'R16_6', 'R32_13': 'R16_6',
+  'R32_14': 'R16_7', 'R32_15': 'R16_7',
+
+  // R16 -> QF
+  'R16_0': 'QF_0', 'R16_1': 'QF_0',
+  'R16_2': 'QF_1', 'R16_3': 'QF_1',
+  'R16_4': 'QF_2', 'R16_5': 'QF_2',
+  'R16_6': 'QF_3', 'R16_7': 'QF_3',
+
+  // QF -> SF (Cruces oficiales FIFA 2026: QF_0 & QF_2 -> SF_0; QF_1 & QF_3 -> SF_1)
+  'QF_0': 'SF_0', 'QF_2': 'SF_0',
+  'QF_1': 'SF_1', 'QF_3': 'SF_1',
+
+  // SF -> F
+  'SF_0': 'F_0', 'SF_1': 'F_0',
+
+  // F -> CHAMPION
+  'F_0': 'CHAMPION'
+};
+
+function getFeederKeys(targetKey) {
+  const feeders = [];
+  for (const [child, parent] of Object.entries(BRACKET_PROGRESSION)) {
+    if (parent === targetKey) {
+      feeders.push(child);
+    }
+  }
+  return feeders;
+}
+
 window.MundialBracketEngine = {
   calcularTablas: mwCalcularTablasDesdeResultados,
   resolverClasificados: mwResolverClasificados,
   generarCrucesR32: mwGenerarCrucesR32,
-  template: MW_R32_TEMPLATE
+  template: MW_R32_TEMPLATE,
+  BRACKET_PROGRESSION: BRACKET_PROGRESSION,
+  getFeederKeys: getFeederKeys
 };
+
 
 // ── BRACKET SCROLL: instalar rueda del mouse → scroll horizontal ──
 function _mwInstallBracketWheelScroll(container) {
@@ -910,15 +949,11 @@ function renderMatchContent(rondaId, matchIndex) {
     eq1 = initMatch?.eq1?.nombre || null;
     eq2 = initMatch?.eq2?.nombre || null;
   } else {
-    // Buscar en los ganadores de la ronda anterior
-    let prevRondaId;
-    if (rondaId === 'R16') prevRondaId = 'R32';
-    else if (rondaId === 'QF') prevRondaId = 'R16';
-    else if (rondaId === 'SF') prevRondaId = 'QF';
-    else if (rondaId === 'F') prevRondaId = 'SF';
-
-    const pMatch1 = prevRondaId + '_' + (matchIndex * 2);
-    const pMatch2 = prevRondaId + '_' + (matchIndex * 2 + 1);
+    // Buscar en los ganadores de la ronda anterior usando el mapa compartido
+    const currentMatchKey = `${rondaId}_${matchIndex}`;
+    const feederKeys = getFeederKeys(currentMatchKey);
+    const pMatch1 = feederKeys[0];
+    const pMatch2 = feederKeys[1];
 
     eq1 = _mwKnockout[pMatch1] || null;
     eq2 = _mwKnockout[pMatch2] || null;
@@ -956,11 +991,10 @@ function renderMatchContent(rondaId, matchIndex) {
     </div>
   `;
 }
-
 window.mwAvanzarEquipo = function(rondaId, matchIndex, equipoGanador) {
   const matchKey = `${rondaId}_${matchIndex}`;
   
-  // Si ya estaba seleccionado, no hacer nada (o deseleccionar? mejor no deseleccionar)
+  // Si ya estaba seleccionado, no hacer nada
   if (_mwKnockout[matchKey] === equipoGanador) return;
 
   _mwKnockout[matchKey] = equipoGanador;
@@ -975,23 +1009,18 @@ window.mwAvanzarEquipo = function(rondaId, matchIndex, equipoGanador) {
 
   mwAutoGuardarDebounced();
   
-  // Re-render completo pero optimizado (el navegador es rápido)
+  // Re-render completo pero optimizado
   renderBracketStructure();
 };
 
 function limpiarRamasFuturas(rondaId, matchIndex) {
-  const progression = ['R32', 'R16', 'QF', 'SF', 'F'];
-  let currentRIdx = progression.indexOf(rondaId);
-  
-  let currentIndex = matchIndex;
-  
-  for (let i = currentRIdx + 1; i < progression.length; i++) {
-    const nextRondaId = progression[i];
-    currentIndex = Math.floor(currentIndex / 2);
-    const nextMatchKey = `${nextRondaId}_${currentIndex}`;
-    
-    // Borramos el ganador del partido futuro porque uno de los contendientes cambió
-    delete _mwKnockout[nextMatchKey];
+  let currentKey = `${rondaId}_${matchIndex}`;
+  while (currentKey && currentKey !== 'CHAMPION') {
+    const nextKey = BRACKET_PROGRESSION[currentKey];
+    if (nextKey) {
+      delete _mwKnockout[nextKey];
+    }
+    currentKey = nextKey;
   }
   // Y si se modificó algo, también borramos al campeón
   delete _mwKnockout['CHAMPION'];
